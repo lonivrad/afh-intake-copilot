@@ -1,0 +1,26 @@
+{
+  "case_id": "case_03",
+  "description": "Fall risk only, recent fall history with FRIDs and inconsistent assistive-device use.",
+  "inputs": {
+    "discharge_summary": "Resident C is a 78-year-old male admitted for evaluation following an unwitnessed fall in his home bathroom that resulted in a bruised left hip and a contusion to the left forearm. No fracture on imaging; no head strike or loss of consciousness. He was discharged from the emergency department to a brief observation stay for cardiac monitoring (negative) and physical therapy assessment. Past medical history is significant for benign prostatic hyperplasia (on tamsulosin 0.4 mg daily — known to cause orthostatic hypotension), essential hypertension (amlodipine 5 mg daily), and generalized anxiety disorder (lorazepam 0.5 mg as needed, used approximately 3-4 times weekly for the past 18 months). Fall history per the resident and his daughter: three documented falls in the past six months. The first occurred in the bathroom (slipped on a bath mat), the second at the bedside attempting to stand at night without his walker, and the third while ambulating from the kitchen carrying a dish. He uses a standard four-prong walker but acknowledges that he 'forgets' to use it about half the time. Cognition on inpatient screening is intact (MoCA 27/30); oriented to person, place, time, situation; no dementia. ADLs: independent with bathing supervision, otherwise self-care without assistance. Continent. No diabetes, no skin breakdown, no behavioral concerns. PT evaluation during admission: gait unsteady without device, fair with walker; bilateral lower extremity weakness; prior PT four months ago discharged after six weeks of strengthening, but the home exercise program was not consistently followed. Disposition: declined return to living alone; daughter requested AFH placement for safety oversight, particularly overnight. Discharge plan: AFH with bed alarm, scheduled toileting, PT re-referral, medication review (consider deprescribing of lorazepam and tamsulosin).",
+    "family_notes": "My father has fallen three times in the past six months — twice at night going to the bathroom, once standing up from the couch with a dish in his hand. He won't use his walker reliably even though we keep it right next to him. He insists he's fine but we worry. He is still mentally sharp and reads the paper every morning and remembers everything. He has become more anxious since my mother's stroke a year ago and started lorazepam around that time. He had physical therapy after one of the earlier falls but stopped doing the home exercises within a month. He does not have diabetes or memory problems, but his balance has gotten worse over the past year. We're hoping the AFH can keep him safe at night especially — that's when most of the falls happen. He's a private and stubborn man and may not call for help."
+  },
+  "ground_truth": {
+    "should_recommend_factors": ["CARE-FALL-RISK"],
+    "should_not_recommend_factors": ["CARE-INSULIN-BGM", "CARE-BEHAV-DEMENTIA", "CARE-COG-IMPAIR", "CARE-WANDER-EXIT", "CARE-WOUND-CARE", "CARE-INCONT-BB", "CARE-EAT-FEED"],
+    "expected_care_plan_elements": [
+      "Bed alarm and low-bed positioning",
+      "Scheduled toileting with night-time assistance",
+      "Bedside commode consideration",
+      "Walker placement and prompted-use protocol; track adherence",
+      "PT re-referral for strengthening and gait training",
+      "Deprescribing review with prescriber: lorazepam and tamsulosin (both FRIDs)",
+      "Orthostatic blood pressure monitoring (tamsulosin risk)"
+    ],
+    "known_source_disagreement": null,
+    "expected_capability_gaps": [
+      "AFH must disclose overnight staffing model — most falls have occurred at night during unassisted toileting attempts; if 1:1 night supervision is not feasible, this limitation must be disclosed and mitigations (bed alarm, motion-sensor lighting, bedside commode) documented in the negotiated care plan",
+      "Resident's reluctance to call for help is a documented behavioral pattern; staff approach must compensate"
+    ]
+  }
+}

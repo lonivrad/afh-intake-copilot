@@ -1,0 +1,26 @@
+{
+  "case_id": "case_05",
+  "description": "Dementia + fall risk: advanced Alzheimer's with recent falls, FRID polypharmacy, and cognitive-mobility mismatch.",
+  "inputs": {
+    "discharge_summary": "Resident E is an 84-year-old female admitted from her prior memory-care facility following an unwitnessed bedside fall at night with a head bump and small forehead laceration (no concussion on imaging; sutures placed and removed prior to discharge). Past medical history is significant for advanced-stage Alzheimer's-type dementia (current cognitive assessment: fully disoriented to person, place, and time; MMSE not completable beyond 4/30 on admission), hypertension, and chronic insomnia. Current medications: donepezil 10 mg daily, memantine 10 mg twice daily, risperidone 0.5 mg twice daily (for agitation), trazodone 50 mg at bedtime (for sleep). Fall history: two falls in the past three months — the current bedside fall and a fall in the dining area at the prior facility while ambulating without her walker. Gait: unsteady with walker; the resident frequently does not use the walker and attempts to stand and ambulate unassisted, particularly at night. ADLs: requires verbal prompting and hands-on assistance for grooming, dressing, and bathing; continent of bowel and bladder with scheduled toileting every 2-3 hours. Behaviors: constant intermittent pacing within the unit (non-exit-seeking — does not approach exterior doors); moderate resistance to care (verbal protest during bathing, occasional pulling away during medication administration); no aggression. No diabetes, no skin breakdown. Currently receiving weekly physical therapy at the prior memory care setting. Family is requesting AFH placement closer to home to support more frequent visits. The prior memory care facility has expressed willingness to continue care but cannot consistently prevent overnight falls without 1:1 staffing that they are not contracted to provide.",
+    "family_notes": "My grandmother has had Alzheimer's for over a decade and is now quite advanced — she doesn't always recognize me anymore though she still smiles when I sing to her. She has fallen twice recently, once hitting her head at night. She paces a lot and we worry about more falls. She is on medications to help with agitation but she still has hard moments. She is not aggressive, mostly anxious and restless. She does not have diabetes. She uses a walker sometimes but doesn't remember to use it consistently — that's a big concern. She has had a physical therapist working with her weekly which has helped a little. We want a home where she can be watched closely, especially at night. She is gentle and loves to be sung to and to hold soft blankets or stuffed animals."
+  },
+  "ground_truth": {
+    "should_recommend_factors": ["CARE-COG-IMPAIR", "CARE-BEHAV-DEMENTIA", "CARE-FALL-RISK", "CARE-MED-ADMIN-MULTI"],
+    "should_not_recommend_factors": ["CARE-INSULIN-BGM", "CARE-INCONT-BB", "CARE-EAT-FEED", "CARE-WOUND-CARE", "CARE-TRANSFER-2PERSON"],
+    "expected_care_plan_elements": [
+      "Overnight close-supervision plan: bed alarm, motion-sensor lighting, low-bed positioning",
+      "Bedside commode and scheduled night-time toileting offers (before resident attempts unassisted)",
+      "Risperidone effectiveness and continued-need review with prescriber (FRID + antipsychotic in advanced dementia)",
+      "Trazodone reassessment for sleep — consider non-pharmacologic alternatives",
+      "Continuation of weekly PT — confirm provider can travel to new AFH or arrange transfer of care",
+      "Comfort interventions integrated into routine (singing, soft blankets, stuffed animals)"
+    ],
+    "known_source_disagreement": null,
+    "expected_capability_gaps": [
+      "Cognitive-mobility mismatch: resident has a walker but is fully disoriented and forgets to use it — this is one of the highest-risk fall profiles. AFH must commit to constant line-of-sight supervision during ambulation OR transition to wheelchair-only mobility plan with the family's informed consent; partial measures will not prevent recurrence",
+      "Prior facility could not safely prevent overnight falls without 1:1 — the smaller AFH staff-to-resident ratio may help, but the AFH must explicitly disclose what overnight supervision intensity it can provide and whether it considers this resident accepted",
+      "Risperidone in advanced dementia carries elevated mortality warning (FDA black box) — care plan should document the family's informed-consent discussion"
+    ]
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "case_id": "case_06",
+  "description": "All three conditions: complex multi-system acuity with prior facility discharge for inability to manage.",
+  "inputs": {
+    "discharge_summary": "Resident F is an 80-year-old male admitted from a memory-care facility following the issuance of a 30-day discharge notice citing inability to safely manage compound clinical and behavioral acuity. Past medical history: type 2 diabetes mellitus, insulin-dependent (sliding-scale Humalog four times daily based on fingerstick BG, plus glargine 25 units at bedtime; metformin 1000 mg BID); Alzheimer's-type dementia diagnosed five years ago, currently moderate-to-advanced stage (oriented to person only; MMSE 12); recurrent falls (four documented falls in the past six months, including one with a bruised rib and one with a forehead laceration requiring sutures); chronic insomnia and intermittent agitation; benign prostatic hyperplasia; chronic anxiety. Most recent HbA1c 8.4%. One severe hypoglycemic episode four months ago requiring paramedic intervention (BG 38 mg/dL, partial responsiveness, treated with IM glucagon). Current medications: insulin (above), metformin, donepezil, memantine, risperidone 0.5 mg BID, citalopram 20 mg daily, tamsulosin 0.4 mg daily, gabapentin 300 mg three times daily (total eight scheduled medications, multiple fall-risk-increasing drugs (FRIDs) and multiple CNS-active medications). Behaviors: intermittent wandering within the unit (one documented exit attempt at the prior memory-care facility that was interrupted, and one exit at the family home prior to that placement); daily resistance to personal care including bathing and incontinence-brief changes; late-afternoon agitation. ADLs: requires extensive assistance for toilet use (CARE ADL self-performance score 3); frequent urinary incontinence and occasional bowel incontinence; transfers with hands-on one-person assist using a gait belt; ambulates short distances with walker but at high fall risk. Diet: carb-controlled, mechanical-soft texture due to poor dentition. Skin: intact, but the resident has a turning/repositioning schedule when in bed due to limited self-repositioning at night. PT discontinued six weeks ago during discharge planning. Family reports significant caregiver burnout and a fragmented prior placement history.",
+    "family_notes": "My father has had a really hard year. He has diabetes that needs insulin shots four times a day, plus dementia that's gotten much worse since his hip surgery last year. He has fallen multiple times — once he split his head open and needed stitches. He paces and gets confused, especially in the late afternoon and evening. He sometimes doesn't know us. He needs help getting to the bathroom and has accidents — both kinds. He's pleasant most of the time but gets angry when staff change his briefs or try to give him insulin. He's been on a lot of medications and they keep adjusting them. The last facility said they couldn't keep him safely and gave us thirty days. We need a home that can really handle complicated cases. We're worried no one will take him."
+  },
+  "ground_truth": {
+    "should_recommend_factors": ["CARE-INSULIN-BGM", "CARE-COG-IMPAIR", "CARE-BEHAV-DEMENTIA", "CARE-WANDER-EXIT", "CARE-FALL-RISK", "CARE-MED-ADMIN-MULTI", "CARE-TOILET-ASSIST", "CARE-INCONT-BB", "CARE-EAT-FEED"],
+    "should_not_recommend_factors": ["CARE-TRANSFER-2PERSON", "CARE-WOUND-CARE"],
+    "expected_care_plan_elements": [
+      "Delegating RN for sliding-scale insulin and BGM (RCW 18.79.260); document competencies for each AFH staff member",
+      "Hypoglycemia emergency protocol with glucagon on premises and trained staff",
+      "Constant line-of-sight or close-supervision plan; bed alarm and low bed for overnight",
+      "Scheduled toileting q2-3h with prompted offers before requests",
+      "Incontinence-brief change protocol with calm-approach training; document refusals",
+      "Mechanical-soft diet with monitored meals for choking risk",
+      "Turning/repositioning schedule in bed (pressure-injury prevention even though skin currently intact)",
+      "Polypharmacy review with prescriber for deprescribing opportunities (gabapentin, citalopram dose, tamsulosin)",
+      "Family communication protocol given fragmented placement history"
+    ],
+    "known_source_disagreement": null,
+    "expected_capability_gaps": [
+      "This composite acuity (insulin-dependent diabetes with severe hypo history, moderate-advanced dementia, recurrent falls, polypharmacy, incontinence with care resistance, wandering, and behavioral agitation) is at the upper end of what a standard AFH can manage. AFH should evaluate whether it holds an applicable specialty contract (SBS, ECS, RSW) AND has the staffing model to provide near-constant supervision; if not, admission risks rapid discharge that worsens resident outcomes",
+      "Severe hypoglycemia history requires 24/7 trained staff with documented glucagon use competency; verify",
+      "Family burnout and prior placement turnover indicate elevated risk of conflict during care-plan disagreements; structured family communication essential"
+    ]
+  }
+}

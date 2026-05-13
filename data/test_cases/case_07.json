@@ -1,0 +1,26 @@
+{
+  "case_id": "case_07",
+  "description": "Source disagreement (falls): family reports frequent home falls; discharge documents steady ambulation with walker.",
+  "inputs": {
+    "discharge_summary": "Resident G is a 76-year-old female admitted for an elective right total knee arthroplasty with a four-day inpatient stay. Past medical history: bilateral knee osteoarthritis (right now post-arthroplasty), essential hypertension (amlodipine 5 mg daily), and chronic neuropathic pain managed with gabapentin 300 mg three times daily. Diabetes: borderline, diet-controlled, last HbA1c 6.4%, no medications. Post-operative course was uncomplicated. Mobility on inpatient PT evaluation day three: ambulates 100 feet with a rolling four-wheel walker with steady gait, no loss of balance during three observed transfers, no falls during admission. PT clinician documented gait as 'steady and within expected post-arthroplasty parameters.' Cognition is intact on bedside assessment; oriented to person, place, time, situation; MoCA not formally administered but no concerns noted. No dementia diagnosis. No history of psychotropic medication use. The resident reports occasional minor balance issues at home but states 'I just take my time and use my walker.' Daughter present at discharge planning expressed concern about safety at home and requested AFH placement; the inpatient social worker noted the daughter's concern in the chart but no falls were directly observed or documented during the admission. Continent. No skin breakdown. Discharge plan: outpatient PT for continued knee rehabilitation; primary care follow-up in two weeks; pain management per current regimen; AFH placement per family request for postoperative safety oversight and rehabilitation support.",
+    "family_notes": "We are very worried about my mother's falling. At home in the last three months she has fallen at least once a week — sometimes twice. She trips on rugs, loses balance going to the bathroom, and we've found her on the floor in the morning a few times. We've told the doctors but she presents very well in the hospital — she walks slowly with her walker for those short distances and looks fine. At home she's tired and rushed and gets into trouble. We do not believe she's safe alone anymore. She doesn't have dementia though her memory is slowly getting worse for names and small things. Her diabetes is mild and managed with diet only. She is also a very proud person and tends to minimize problems to medical staff. The hospital saw her at her best."
+  },
+  "ground_truth": {
+    "should_recommend_factors": ["CARE-FALL-RISK"],
+    "should_not_recommend_factors": ["CARE-INSULIN-BGM", "CARE-BEHAV-DEMENTIA", "CARE-WANDER-EXIT", "CARE-WOUND-CARE", "CARE-INCONT-BB", "CARE-TRANSFER-2PERSON", "CARE-EAT-FEED"],
+    "expected_care_plan_elements": [
+      "Fall-risk precautions defaulting to family-reported pattern: bed alarm, motion-sensor lighting, supervised night-time toileting",
+      "Pre-admission home-environment assessment if feasible (rug removal, lighting, bathroom grab bars)",
+      "Reconcile fall pattern after 30 days of observation in AFH — supervised setting may either confirm family report or reveal that prior environment was the dominant factor",
+      "Outpatient PT continuation; coordinate with AFH for transport",
+      "Gabapentin appropriateness review (FRID)",
+      "Cognitive baseline check (family mentions memory changes; rule out contributory cognitive impairment)"
+    ],
+    "known_source_disagreement": "Family reports approximately weekly falls at home over the past three months, including unwitnessed morning floor-discoveries; discharge summary documents steady ambulation with rolling walker during a four-day post-operative admission and no in-hospital falls. The inpatient observation window does not capture community-setting fall pattern. Family also notes the resident tends to minimize problems to medical staff and 'presents at her best' in clinical encounters. Defaulting to the higher-risk source (family) is the safer position pending observed-setting assessment in AFH.",
+    "expected_capability_gaps": [
+      "AFH must commit to a fall-risk-default care plan based on the family's reported pattern, not the clinical-record minimum; a record-driven plan would understate risk",
+      "Document a 30-day observation window with explicit fall-pattern reassessment; do not lock care plan to either source's framing prematurely",
+      "Family's observation of resident's tendency to minimize is itself important clinical data and should be flagged for the prescriber"
+    ]
+  }
+}

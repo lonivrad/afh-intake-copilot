@@ -1,0 +1,21 @@
+{
+  "case_id": "case_01",
+  "description": "Diabetes only, simple: well-controlled oral-managed type 2, no acuity factors triggered.",
+  "inputs": {
+    "discharge_summary": "Resident A is a 74-year-old female with type 2 diabetes mellitus diagnosed approximately 12 years ago, admitted from home after a brief observation stay for chest discomfort that was determined to be non-cardiac (likely GERD with associated anxiety). Stress testing during admission was negative. Past medical history is significant for hypertension (well-controlled on lisinopril 10 mg daily), mild osteoarthritis of bilateral knees, and a remote history of cholecystectomy. Diabetes management consists of metformin 1000 mg twice daily; she has not required insulin. Most recent HbA1c three months prior to admission was 6.8%. Home fingerstick blood-glucose monitoring once daily averages 110-145 mg/dL fasting. She reports no hypoglycemic episodes in the past year. Activities of daily living are fully independent: ambulates without an assistive device, toilets independently, bathes independently, prepares simple meals. Cognition is intact on bedside and formal screening (MoCA 28/30); oriented to person, place, time, and situation; manages her own medications with a weekly pillbox setup by her daughter. Mood is stable, with normal grief response since the recent death of her husband. No symptoms of depression on screening. Family is supportive — her daughter visits twice weekly and assists with grocery shopping and medication refills. The resident has expressed a preference for adult family home placement to reduce social isolation following her husband's death and to maintain a structured environment with companionship. There is no history of falls, no use of psychotropic medications, no urinary or bowel incontinence, and no skin breakdown. Diet is a moderate carbohydrate-controlled diabetic diet. Discharge plan: continue current medications, daily fingerstick blood-glucose monitoring, follow-up with primary care in two weeks. Appropriate for a standard AFH setting without specialty contract requirements.",
+    "family_notes": "Resident A is independent in all activities of daily living. She prepares her own breakfast, walks around the neighborhood on dry days, and reads daily. She has been lonely since her husband passed last spring, which is part of why we suggested an AFH. She manages her medications well with a weekly pillbox we fill together on Sundays. She checks her blood sugar once each morning and writes it in a notebook. She has not fallen in the past several years and uses no walker or cane. She enjoys playing cards and watching cooking shows. She does not have memory problems or confusion at all. Her preferred meals are simple — chicken, vegetables, rice — and she watches her carbs but is not strict about it. She would like to keep her morning walking routine if possible and would appreciate a quiet room to read in. She gets along easily with new people."
+  },
+  "ground_truth": {
+    "should_recommend_factors": [],
+    "should_not_recommend_factors": ["CARE-INSULIN-BGM", "CARE-BEHAV-DEMENTIA", "CARE-COG-IMPAIR", "CARE-WANDER-EXIT", "CARE-FALL-RISK", "CARE-WOUND-CARE", "CARE-INCONT-BB", "CARE-TRANSFER-2PERSON", "CARE-EAT-FEED"],
+    "expected_care_plan_elements": [
+      "Moderate carbohydrate-controlled diet",
+      "Once-daily fingerstick blood-glucose monitoring with documentation",
+      "Metformin 1000 mg BID per medication schedule",
+      "Hypoglycemia awareness training for AFH staff despite oral-only therapy",
+      "Support social engagement (cards, reading, walking)"
+    ],
+    "known_source_disagreement": null,
+    "expected_capability_gaps": []
+  }
+}

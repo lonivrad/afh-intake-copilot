@@ -1,0 +1,25 @@
+{
+  "case_id": "case_02",
+  "description": "Dementia only, moderate stage with exit-seeking and sundowning.",
+  "inputs": {
+    "discharge_summary": "Resident B is an 82-year-old female with a five-year history of Alzheimer's-type dementia, admitted following an emergency department visit for an unwitnessed exit-seeking episode at her prior memory-care facility, during which she walked out through an unlocked staff door and was located two blocks away by police. No injuries sustained. Past medical history includes hypertension (controlled on amlodipine) and hypothyroidism (stable on levothyroxine). Current medications: donepezil 10 mg daily, memantine 10 mg twice daily, quetiapine 25 mg at bedtime (added six weeks ago for sundowning agitation, with mixed effect). Cognitive function on inpatient assessment: oriented to person only; unable to identify the year, season, or current location after multiple cues. Mini-Mental State Examination score 13/30. Mood is generally pleasant with episodes of late-afternoon agitation and verbal repetition (calling for her deceased husband). ADLs: requires verbal prompting for grooming and dressing; bathes with hands-on assistance twice weekly; continent of bowel and bladder; ambulates independently without an assistive device; no falls during admission. Behaviors during admission: two attempts to leave the inpatient unit (both interrupted by staff); intermittent agitation in late afternoon responsive to redirection by familiar staff; resistance to evening hygiene routine on three occasions. The prior memory care facility issued a 30-day notice citing inability to safely support exit-seeking behavior without additional specialty contract resources. No diabetes, no skin breakdown, no fall history. Discharge plan: AFH placement with documented secured-egress capability; continue current medication regimen; behavioral care plan emphasizing structured routine, sundowning interventions, and exit-seeking risk mitigation; family meeting prior to placement. Re-evaluation of quetiapine appropriate in 30-60 days.",
+    "family_notes": "My mother has been declining for several years but the last six months have been the hardest. She wanders at night and has twice gotten out of the memory care building. The staff at her last facility said they couldn't keep her safe without more help than they had, and we received a discharge notice. She becomes confused and anxious in the late afternoon. She sometimes does not recognize us. She still loves music — especially Frank Sinatra — and gardening. She does not fall, eats well, and is continent. She does not have diabetes or any other medical issues beyond her dementia and blood pressure. She gets agitated during baths and we have learned to wait for her own daughter or granddaughter to help with that. We need a home that can keep her safe from leaving without making her feel locked in. We're worried she'll wander out and not be found this time."
+  },
+  "ground_truth": {
+    "should_recommend_factors": ["CARE-BEHAV-DEMENTIA", "CARE-COG-IMPAIR", "CARE-WANDER-EXIT"],
+    "should_not_recommend_factors": ["CARE-INSULIN-BGM", "CARE-FALL-RISK", "CARE-WOUND-CARE", "CARE-INCONT-BB", "CARE-TRANSFER-2PERSON", "CARE-EAT-FEED"],
+    "expected_care_plan_elements": [
+      "Secured/alarmed egress with documented perimeter check capability",
+      "Structured daily routine to reduce sundowning agitation",
+      "Late-afternoon staffing reinforced for sundowning interventions",
+      "Bathing approach using familiar caregiver and verbal de-escalation",
+      "Music-based comfort interventions (resident-preferred genre)",
+      "Quetiapine effectiveness review in 30-60 days with prescriber"
+    ],
+    "known_source_disagreement": null,
+    "expected_capability_gaps": [
+      "Exit-seeking + behavior cluster typically requires SBS contract level support; if AFH does not hold SBS/RSW contract or have demonstrated capacity for exit-seeking, this must be disclosed under RCW 70.128.280 and admission reconsidered",
+      "Verify physical-plant secured-egress capability (door alarms, latches) meets prior-facility's failure point"
+    ]
+  }
+}

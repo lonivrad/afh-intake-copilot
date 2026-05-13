@@ -1,0 +1,25 @@
+{
+  "case_id": "case_04",
+  "description": "Diabetes + dementia: insulin-dependent type 2 with moderate Alzheimer's and resistance to injections.",
+  "inputs": {
+    "discharge_summary": "Resident D is a 79-year-old female admitted for management of recurrent UTI and reassessment of her diabetes regimen. Past medical history is significant for type 2 diabetes mellitus, insulin-dependent for the past six years (Humalog sliding scale before meals and at bedtime based on fingerstick blood-glucose values, plus glargine 30 units at bedtime; metformin 1000 mg BID), and Alzheimer's-type dementia diagnosed approximately four years ago (moderate stage; MMSE 18 on admission). Most recent HbA1c 7.8%. Two episodes of mild hypoglycemia (BG 60-70 mg/dL) in the past year, both self-resolved after juice. Additional history: hypertension (lisinopril), hyperlipidemia (atorvastatin), and mild depression on sertraline 50 mg daily. Cognition on inpatient assessment: oriented to person and place but not time; able to recognize family; requires verbal cues for ADLs but is cooperative outside of insulin administration times. Behaviors: during the past 8-10 months, the resident has developed pronounced resistance to insulin injections — pulls away, becomes agitated, occasionally verbally protests; no aggression toward staff in other contexts. No exit-seeking, no wandering, no falls. Continent. Bathes with hands-on assistance; otherwise independent in eating and dressing with verbal prompting. Diet: carb-controlled, regular texture. Skin intact. Primary caregiver has been her adult daughter; daughter is now reporting significant burnout and is unable to continue four-times-daily insulin administration at home. Discharge plan: AFH placement contingent on availability of delegating registered nurse to authorize and oversee BGM-paired sliding-scale insulin administration; behavioral approach to injection times (familiar caregiver assignment, distraction technique); BGM four times daily.",
+    "family_notes": "My mother has had diabetes for over 20 years and dementia for the past 4 years. I've been taking care of her at home but it's become too much for me — I have to give her insulin four times a day and she fights me on it now, even though she's gentle every other time. She knows me but doesn't always know what day it is. She is otherwise pleasant and pleasant to be around. She loves cats and old movies. She bathes with my help and is continent. She has not fallen. The hardest part has been the insulin shots — she sees the needle and gets very upset. The hospital said an AFH with a nurse who can come in for the insulin would be best. She is not aggressive at all in other situations. I'm worried about who will give her the shots and whether they can handle her resistance without making it traumatic."
+  },
+  "ground_truth": {
+    "should_recommend_factors": ["CARE-INSULIN-BGM", "CARE-BEHAV-DEMENTIA", "CARE-COG-IMPAIR", "CARE-MED-ADMIN-MULTI"],
+    "should_not_recommend_factors": ["CARE-WANDER-EXIT", "CARE-FALL-RISK", "CARE-WOUND-CARE", "CARE-INCONT-BB", "CARE-TRANSFER-2PERSON", "CARE-EAT-FEED"],
+    "expected_care_plan_elements": [
+      "Delegating registered nurse identified and contracted before admission (RCW 18.79.260) for sliding-scale insulin administration",
+      "BGM four times daily with documentation; AFH staff trained by delegating RN",
+      "Injection-time behavioral protocol: familiar caregiver, distraction, calm voice; document attempts and outcomes",
+      "Hypoglycemia recognition and treatment protocol with quick-acting carbs at point of care",
+      "Resident-preferred comfort items (cats, old movies) integrated into routine",
+      "Monitor sertraline efficacy; coordinate with prescriber"
+    ],
+    "known_source_disagreement": null,
+    "expected_capability_gaps": [
+      "Sliding-scale insulin requires staff to act on a BG value — this is the boundary between unlicensed assistance and nursing practice. AFH must have delegating RN with documented competency for this specific resident, not a generic nurse delegation",
+      "Resistance during a daily-multiple care task (injections) increases the risk of administration errors or skipped doses; AFH should disclose its protocol for documenting missed/refused doses"
+    ]
+  }
+}
