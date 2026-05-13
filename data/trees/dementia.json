@@ -1,0 +1,153 @@
+{
+  "tree_id": "dementia",
+  "entry_node_id": "DX_STATUS",
+  "nodes": [
+    {
+      "node_id": "DX_STATUS",
+      "question_text": "Has the resident received a formal dementia diagnosis, is it suspected but unconfirmed, or is there no concern?",
+      "context_hint": "A confirmed irreversible dementia is relevant to potential EARC-SDC eligibility (WAC 388-106-0033, applies in ALFs). For AFH classification, cognitive performance (WAC 388-106-0090) is what drives Group C/D placement regardless of diagnosis label.",
+      "expected_answer_shape": "enum",
+      "answer_options": ["confirmed", "suspected_unconfirmed", "no_concern"],
+      "updates_profile_field": "dementia.diagnosis_status",
+      "next_node_logic": {
+        "default": "STAGE",
+        "conditional": [
+          {"if_answer": "confirmed", "goto": "DX_TYPE"},
+          {"if_answer": "no_concern", "goto": "END"}
+        ]
+      }
+    },
+    {
+      "node_id": "DX_TYPE",
+      "question_text": "What type of dementia has been diagnosed?",
+      "context_hint": "Lewy body dementia and frontotemporal dementia have markedly different behavioral and medication-tolerance profiles than Alzheimer's. Lewy body in particular is sensitive to antipsychotics.",
+      "expected_answer_shape": "enum",
+      "answer_options": ["alzheimers", "vascular", "lewy_body", "frontotemporal", "mixed", "unspecified", "unknown"],
+      "updates_profile_field": "dementia.diagnosis_type",
+      "next_node_logic": {
+        "default": "STAGE",
+        "conditional": []
+      }
+    },
+    {
+      "node_id": "STAGE",
+      "question_text": "What is the resident's current dementia stage?",
+      "context_hint": "Stage influences expected trajectory and the AFH's required scope of supervision. Advanced stage typically combines with high ADL and clinical complexity to push toward Group D-High or E.",
+      "expected_answer_shape": "enum",
+      "answer_options": ["early", "moderate", "advanced", "end_stage", "unknown"],
+      "updates_profile_field": "dementia.stage",
+      "next_node_logic": {
+        "default": "ORIENTATION_LEVEL",
+        "conditional": []
+      }
+    },
+    {
+      "node_id": "ORIENTATION_LEVEL",
+      "question_text": "Is the resident oriented to person, place, and time?",
+      "context_hint": "Orientation is a clinical-observation proxy for the CARE Cognitive Performance Score (WAC 388-106-0090). Disorientation to place or time is common; full disorientation typically indicates moderate-to-advanced impairment.",
+      "expected_answer_shape": "enum",
+      "answer_options": ["oriented_x3", "oriented_x2_person_place", "oriented_x1_person", "fully_disoriented"],
+      "updates_profile_field": "dementia.orientation_level",
+      "next_node_logic": {
+        "default": "BEHAV_AGITATION",
+        "conditional": []
+      }
+    },
+    {
+      "node_id": "BEHAV_AGITATION",
+      "question_text": "Does the resident display agitation or irritability that is not easily redirected?",
+      "context_hint": "Per WAC 388-106-0100, 'irritability/agitation, not easily altered, requires intervention' is an enumerated mood/behavior indicator and contributes to BPS.",
+      "expected_answer_shape": "boolean",
+      "answer_options": [],
+      "updates_profile_field": "dementia.behaviors.agitation",
+      "next_node_logic": {
+        "default": "BEHAV_EXIT_SEEKING",
+        "conditional": []
+      }
+    },
+    {
+      "node_id": "BEHAV_EXIT_SEEKING",
+      "question_text": "Has the resident shown exit-seeking, elopement, or attempted elopement?",
+      "context_hint": "Per WAC 388-106-0100, exit-seeking wandering is in behavior categories 23-28 with the highest behavior values (4-5). Drives Group B classification. AFH must disclose secured-egress capability per RCW 70.128.280.",
+      "expected_answer_shape": "boolean",
+      "answer_options": [],
+      "updates_profile_field": "dementia.behaviors.exit_seeking",
+      "next_node_logic": {
+        "default": "BEHAV_SUNDOWNING",
+        "conditional": []
+      }
+    },
+    {
+      "node_id": "BEHAV_SUNDOWNING",
+      "question_text": "Does the resident experience sundowning — increased confusion, restlessness, or behavioral symptoms in the late afternoon or evening?",
+      "context_hint": "Sundowning is not a discrete WAC factor but typically manifests through enumerated behaviors (agitation, wandering, yelling) at higher frequency in late day. Worth capturing for staffing scheduling.",
+      "expected_answer_shape": "boolean",
+      "answer_options": [],
+      "updates_profile_field": "dementia.behaviors.sundowning",
+      "next_node_logic": {
+        "default": "BEHAV_RESIST_CARE",
+        "conditional": []
+      }
+    },
+    {
+      "node_id": "BEHAV_RESIST_CARE",
+      "question_text": "Does the resident resist personal care (bathing, toileting, medication, dressing) — verbally, physically, or both?",
+      "context_hint": "Per WAC 388-106-0100, 'combative during personal care' is enumerated and carries a high behavior value when current.",
+      "expected_answer_shape": "enum",
+      "answer_options": ["no_resistance", "verbal_only", "physical_occasional", "physical_frequent", "combative_during_care"],
+      "updates_profile_field": "dementia.behaviors.resistance_to_care",
+      "next_node_logic": {
+        "default": "PRIOR_PLACEMENT_TYPE",
+        "conditional": []
+      }
+    },
+    {
+      "node_id": "PRIOR_PLACEMENT_TYPE",
+      "question_text": "Where was the resident immediately before this placement?",
+      "context_hint": "Prior placement signals trajectory. A discharge from skilled nursing or memory care often indicates clinical or behavioral acuity above what those settings could manage; a move from family home often reflects caregiver burnout.",
+      "expected_answer_shape": "enum",
+      "answer_options": ["home_with_family", "home_alone", "adult_family_home", "assisted_living", "memory_care", "skilled_nursing", "hospital", "other"],
+      "updates_profile_field": "dementia.prior_placement.type",
+      "next_node_logic": {
+        "default": "MOVE_REASON",
+        "conditional": []
+      }
+    },
+    {
+      "node_id": "MOVE_REASON",
+      "question_text": "What is the primary reason for the current move?",
+      "context_hint": "Reason for move is critical signal. 'Behaviors unmanaged at prior facility' is a major risk indicator and should drive a capability-gap entry if this AFH does not have demonstrated capacity for those behaviors.",
+      "expected_answer_shape": "enum",
+      "answer_options": ["behaviors_unmanaged_prior", "family_caregiver_burnout", "medical_acuity_increase", "involuntary_discharge_prior", "financial_change", "family_preference_geography", "other"],
+      "updates_profile_field": "dementia.prior_placement.move_reason",
+      "next_node_logic": {
+        "default": "FAMILY_PRIMARY_CONTACT",
+        "conditional": []
+      }
+    },
+    {
+      "node_id": "FAMILY_PRIMARY_CONTACT",
+      "question_text": "Who is the primary family contact or responsible party, and what is their relationship to the resident? Use placeholder names only in test/demo data.",
+      "context_hint": "Capture the responsible party for care-plan communication and major decisions. Do not collect real phone numbers, emails, or other real PII in synthetic test cases or demos.",
+      "expected_answer_shape": "freetext",
+      "answer_options": [],
+      "updates_profile_field": "dementia.family.primary_contact",
+      "next_node_logic": {
+        "default": "FAMILY_COMM_PREF",
+        "conditional": []
+      }
+    },
+    {
+      "node_id": "FAMILY_COMM_PREF",
+      "question_text": "What is the family's preferred frequency and method of communication?",
+      "context_hint": "Frequency expectation directly affects staff workload. Daily phone updates require a different operational rhythm than weekly emails. Set the expectation at intake to avoid disputes.",
+      "expected_answer_shape": "enum",
+      "answer_options": ["daily_phone", "weekly_phone", "weekly_email_or_text", "as_needed_only", "in_person_only", "other"],
+      "updates_profile_field": "dementia.family.communication_preference",
+      "next_node_logic": {
+        "default": "END",
+        "conditional": []
+      }
+    }
+  ]
+}

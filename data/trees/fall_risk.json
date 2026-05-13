@@ -1,0 +1,145 @@
+{
+  "tree_id": "fall_risk",
+  "entry_node_id": "FALL_HISTORY_6MO",
+  "nodes": [
+    {
+      "node_id": "FALL_HISTORY_6MO",
+      "question_text": "Has the resident had any falls in the last 6 months?",
+      "context_hint": "Fall history is the strongest single predictor of future falls. Per WAC 388-106-0095, pathological bone fracture (often fall-related) is a CARE clinical-complexity factor; locomotion ADL (WAC 388-106-0105) and CPS (WAC 388-106-0090) also drive composite fall risk.",
+      "expected_answer_shape": "boolean",
+      "answer_options": [],
+      "updates_profile_field": "fall_risk.history_6mo.any_falls",
+      "next_node_logic": {
+        "default": "ASSISTIVE_DEVICE",
+        "conditional": [
+          {"if_answer": true, "goto": "FALL_COUNT"}
+        ]
+      }
+    },
+    {
+      "node_id": "FALL_COUNT",
+      "question_text": "How many falls in the last 6 months?",
+      "context_hint": "Two or more falls in 6 months meets the operational threshold for elevated fall risk in most clinical guidelines and is worth capturing as a discrete risk-register entry.",
+      "expected_answer_shape": "numeric",
+      "answer_options": [],
+      "updates_profile_field": "fall_risk.history_6mo.count",
+      "next_node_logic": {
+        "default": "FALL_CIRCUMSTANCES",
+        "conditional": []
+      }
+    },
+    {
+      "node_id": "FALL_CIRCUMSTANCES",
+      "question_text": "Under what circumstances did the most recent fall occur?",
+      "context_hint": "Toileting falls and night-time bedside falls have specific environmental countermeasures (bedside commode, low bed, motion-sensor lighting). Capture circumstance to drive a targeted care-plan intervention.",
+      "expected_answer_shape": "enum",
+      "answer_options": ["toileting_or_bathroom", "bedside_or_transfer", "ambulating_indoors", "ambulating_outdoors", "during_personal_care", "unwitnessed_unknown", "other"],
+      "updates_profile_field": "fall_risk.history_6mo.most_recent_circumstance",
+      "next_node_logic": {
+        "default": "FALL_OUTCOMES",
+        "conditional": []
+      }
+    },
+    {
+      "node_id": "FALL_OUTCOMES",
+      "question_text": "What was the worst outcome of any fall in the last 6 months?",
+      "context_hint": "An ER visit or hospitalization from a fall raises both clinical and regulatory stakes. DSHS enforcement scrutiny on AFH fall management increases after a hospitalized fall, especially if unwitnessed.",
+      "expected_answer_shape": "enum",
+      "answer_options": ["no_injury", "minor_injury_treated_in_place", "ER_visit_no_admission", "hospitalization", "fracture_or_head_injury"],
+      "updates_profile_field": "fall_risk.history_6mo.worst_outcome",
+      "next_node_logic": {
+        "default": "ASSISTIVE_DEVICE",
+        "conditional": []
+      }
+    },
+    {
+      "node_id": "ASSISTIVE_DEVICE",
+      "question_text": "What mobility or assistive device does the resident use?",
+      "context_hint": "Device alone is not protective — residents using a walker who forget to use it (cognitive-mobility mismatch) are at higher risk than residents without a device who ambulate within their capacity. Capture compliance separately in gait stability.",
+      "expected_answer_shape": "enum",
+      "answer_options": ["none", "cane", "walker", "rollator", "wheelchair_self_propel", "wheelchair_staff_propel", "transfer_lift_only_non_ambulatory"],
+      "updates_profile_field": "fall_risk.assistive_device",
+      "next_node_logic": {
+        "default": "GAIT_STABILITY",
+        "conditional": []
+      }
+    },
+    {
+      "node_id": "GAIT_STABILITY",
+      "question_text": "How would you describe the resident's gait?",
+      "context_hint": "ADL locomotion score (WAC 388-106-0105) reflects this assessment. Unsteady gait without assistive-device use is a high-risk mismatch and a capability-gap candidate if the AFH cannot provide constant supervision.",
+      "expected_answer_shape": "enum",
+      "answer_options": ["stable_independent", "stable_with_device", "unsteady_with_device", "unsteady_without_device", "non_ambulatory"],
+      "updates_profile_field": "fall_risk.gait_stability",
+      "next_node_logic": {
+        "default": "MEDS_FALL_RISK",
+        "conditional": []
+      }
+    },
+    {
+      "node_id": "MEDS_FALL_RISK",
+      "question_text": "Does the resident take any medications known to elevate fall risk (psychotropics, sedatives/hypnotics, antihypertensives causing orthostasis, opioids, anticonvulsants)?",
+      "context_hint": "Polypharmacy with 4+ fall-risk-increasing drugs (FRIDs) is a documented independent risk factor. Capture so synthesis can flag prescriber outreach for deprescribing review.",
+      "expected_answer_shape": "boolean",
+      "answer_options": [],
+      "updates_profile_field": "fall_risk.medications.has_FRIDs",
+      "next_node_logic": {
+        "default": "HOME_ACCOMMODATIONS",
+        "conditional": [
+          {"if_answer": true, "goto": "MEDS_FALL_RISK_CATEGORIES"}
+        ]
+      }
+    },
+    {
+      "node_id": "MEDS_FALL_RISK_CATEGORIES",
+      "question_text": "Which categories apply? (List all that apply.)",
+      "context_hint": "Free-list rather than enum because residents often take multiple. Synthesis step will normalize.",
+      "expected_answer_shape": "freetext",
+      "answer_options": [],
+      "updates_profile_field": "fall_risk.medications.FRID_categories",
+      "next_node_logic": {
+        "default": "HOME_ACCOMMODATIONS",
+        "conditional": []
+      }
+    },
+    {
+      "node_id": "HOME_ACCOMMODATIONS",
+      "question_text": "What physical-environment accommodations will the AFH need to provide?",
+      "context_hint": "AFH must mitigate environment-of-care hazards. Grab bars, low beds, perimeter-monitor alarms, and clear path-of-travel are common; tracking them at intake supports the negotiated care plan.",
+      "expected_answer_shape": "enum",
+      "answer_options": ["standard_only", "grab_bars_bathroom", "low_bed_and_or_bed_alarm", "wheelchair_accessibility", "perimeter_monitoring_alarm", "multiple_modifications", "unknown"],
+      "updates_profile_field": "fall_risk.environment.accommodations_required",
+      "next_node_logic": {
+        "default": "PT_HISTORY",
+        "conditional": []
+      }
+    },
+    {
+      "node_id": "PT_HISTORY",
+      "question_text": "Has the resident had recent physical therapy involvement (currently active, recently discharged, or none)?",
+      "context_hint": "An active PT plan is a coordination opportunity; a recent discharge with an unmet plan is a capability-gap concern. No PT after a fall typically indicates a missed referral.",
+      "expected_answer_shape": "enum",
+      "answer_options": ["currently_active", "discharged_within_3mo", "discharged_over_3mo_ago", "none", "unknown"],
+      "updates_profile_field": "fall_risk.pt_history.status",
+      "next_node_logic": {
+        "default": "END",
+        "conditional": [
+          {"if_answer": "currently_active", "goto": "PT_NOTES"},
+          {"if_answer": "discharged_within_3mo", "goto": "PT_NOTES"}
+        ]
+      }
+    },
+    {
+      "node_id": "PT_NOTES",
+      "question_text": "Who is the PT provider, and what is the home-exercise or transfer-training plan the AFH should continue?",
+      "context_hint": "Capture the provider name, frequency, and specific transfer-training or strengthening cues so AFH staff can reinforce between sessions. Continuity here is one of the highest-yield fall-prevention investments.",
+      "expected_answer_shape": "freetext",
+      "answer_options": [],
+      "updates_profile_field": "fall_risk.pt_history.provider_and_plan",
+      "next_node_logic": {
+        "default": "END",
+        "conditional": []
+      }
+    }
+  ]
+}

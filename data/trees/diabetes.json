@@ -1,0 +1,144 @@
+{
+  "tree_id": "diabetes",
+  "entry_node_id": "DIABETES_TYPE",
+  "nodes": [
+    {
+      "node_id": "DIABETES_TYPE",
+      "question_text": "What type of diabetes does the resident have?",
+      "context_hint": "Confirms diagnosis type, which drives insulin/oral-med expectations and CARE clinical-complexity factor enumeration (WAC 388-106-0095 lists Diabetes Mellitus — both insulin- and non-insulin-dependent).",
+      "expected_answer_shape": "enum",
+      "answer_options": ["type_1", "type_2", "unknown"],
+      "updates_profile_field": "diabetes.type",
+      "next_node_logic": {
+        "default": "INSULIN_USE",
+        "conditional": []
+      }
+    },
+    {
+      "node_id": "INSULIN_USE",
+      "question_text": "Does the resident currently take insulin?",
+      "context_hint": "Injections (including insulin) are an enumerated CARE clinical-complexity factor (WAC 388-106-0095). Insulin administration by unlicensed AFH staff requires nurse delegation per WAC 388-76-10405 and RCW 18.79.260.",
+      "expected_answer_shape": "boolean",
+      "answer_options": [],
+      "updates_profile_field": "diabetes.insulin.uses",
+      "next_node_logic": {
+        "default": "ORAL_MEDS",
+        "conditional": [
+          {"if_answer": true, "goto": "INSULIN_REGIMEN"}
+        ]
+      }
+    },
+    {
+      "node_id": "INSULIN_REGIMEN",
+      "question_text": "What insulin regimen — fixed dose, sliding scale, or basal-bolus?",
+      "context_hint": "Sliding scale requires staff to make a judgment call based on a blood-glucose value. That judgment is the boundary between unlicensed assistance and nursing practice.",
+      "expected_answer_shape": "enum",
+      "answer_options": ["fixed_dose", "sliding_scale", "basal_bolus", "unknown"],
+      "updates_profile_field": "diabetes.insulin.regimen",
+      "next_node_logic": {
+        "default": "INSULIN_ADMIN",
+        "conditional": []
+      }
+    },
+    {
+      "node_id": "INSULIN_ADMIN",
+      "question_text": "Who will administer insulin in the AFH?",
+      "context_hint": "Per RCW 18.79.260, unlicensed staff may administer insulin only under nurse delegation by a registered nurse. Self-administration and family administration are not delegations and must be documented in the care plan.",
+      "expected_answer_shape": "enum",
+      "answer_options": ["self", "family", "delegating_RN_via_AFH_staff", "contracted_LPN_or_RN", "unknown"],
+      "updates_profile_field": "diabetes.insulin.administered_by",
+      "next_node_logic": {
+        "default": "ORAL_MEDS",
+        "conditional": []
+      }
+    },
+    {
+      "node_id": "ORAL_MEDS",
+      "question_text": "What oral or non-insulin diabetes medications does the resident take?",
+      "context_hint": "Sulfonylureas (e.g., glipizide, glyburide) carry hypoglycemia risk comparable to insulin. Note any high-risk oral agent so the care plan covers monitoring.",
+      "expected_answer_shape": "freetext",
+      "answer_options": [],
+      "updates_profile_field": "diabetes.oral_medications",
+      "next_node_logic": {
+        "default": "BGM_FREQUENCY",
+        "conditional": []
+      }
+    },
+    {
+      "node_id": "BGM_FREQUENCY",
+      "question_text": "How often is blood glucose monitored each day?",
+      "context_hint": "DSHS Form 10-409 Clinical Services section explicitly lists 'Blood glucose monitoring' as a disclosable service. AFH must disclose its BGM capacity.",
+      "expected_answer_shape": "enum",
+      "answer_options": ["none", "once_daily", "two_to_three_daily", "four_or_more_daily", "PRN_only"],
+      "updates_profile_field": "diabetes.bgm_frequency_per_day",
+      "next_node_logic": {
+        "default": "LAST_A1C",
+        "conditional": []
+      }
+    },
+    {
+      "node_id": "LAST_A1C",
+      "question_text": "What was the most recent HbA1c value (percent), if known? Enter the number or leave blank if unknown.",
+      "context_hint": "A1C above 9 generally indicates poorly controlled diabetes and elevates the staffing/clinical-attention burden. Below 6.5 in an elderly resident can indicate over-treatment and hypoglycemia risk.",
+      "expected_answer_shape": "numeric_or_null",
+      "answer_options": [],
+      "updates_profile_field": "diabetes.last_a1c_percent",
+      "next_node_logic": {
+        "default": "HYPO_HISTORY",
+        "conditional": []
+      }
+    },
+    {
+      "node_id": "HYPO_HISTORY",
+      "question_text": "Has the resident had any hypoglycemic events in the last 6 months?",
+      "context_hint": "Hypoglycemia history is a key safety driver. Any severe event (requiring third-party rescue, ER, or hospitalization) materially raises supervision needs.",
+      "expected_answer_shape": "boolean",
+      "answer_options": [],
+      "updates_profile_field": "diabetes.hypoglycemia.history_6mo",
+      "next_node_logic": {
+        "default": "DIET_RESTRICTIONS",
+        "conditional": [
+          {"if_answer": true, "goto": "HYPO_SEVERITY"}
+        ]
+      }
+    },
+    {
+      "node_id": "HYPO_SEVERITY",
+      "question_text": "What was the severity of the most recent hypoglycemic event?",
+      "context_hint": "Severe events (loss of consciousness, ER, seizure) trigger care-plan-level supervision requirements and may indicate the regimen needs reassessment by the prescriber.",
+      "expected_answer_shape": "enum",
+      "answer_options": ["mild_self_treated", "moderate_third_party_assist", "severe_ER_or_hospitalization", "unknown"],
+      "updates_profile_field": "diabetes.hypoglycemia.most_recent_severity",
+      "next_node_logic": {
+        "default": "DIET_RESTRICTIONS",
+        "conditional": []
+      }
+    },
+    {
+      "node_id": "DIET_RESTRICTIONS",
+      "question_text": "What dietary restrictions or modifications does the resident require?",
+      "context_hint": "Carb-controlled and renal-diabetic diets are common. Modified texture and tube feeding interact with WAC 388-106-0095/-0110 (swallowing problems and tube feeding are CARE factors).",
+      "expected_answer_shape": "enum",
+      "answer_options": ["none", "carbohydrate_controlled", "renal_diabetic", "low_sodium", "modified_texture", "tube_feeding", "other"],
+      "updates_profile_field": "diabetes.diet_restrictions",
+      "next_node_logic": {
+        "default": "END",
+        "conditional": [
+          {"if_answer": "other", "goto": "DIET_NOTES"}
+        ]
+      }
+    },
+    {
+      "node_id": "DIET_NOTES",
+      "question_text": "Describe the dietary restriction.",
+      "context_hint": "",
+      "expected_answer_shape": "freetext",
+      "answer_options": [],
+      "updates_profile_field": "diabetes.diet_notes",
+      "next_node_logic": {
+        "default": "END",
+        "conditional": []
+      }
+    }
+  ]
+}
