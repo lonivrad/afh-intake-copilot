@@ -1,158 +1,156 @@
-[
-  {
-    "code_id": "AFH-BEHAV-DEMENTIA",
-    "code_name": "Behavior symptom management (dementia behaviors)",
-    "clinical_criteria": [
-      "Documented behaviors from WAC 388-106-0100 list: assaultive behavior, combative during personal care, irritability/agitation not easily altered, hallucinations, delusions, yelling/screaming 4+ days/week, resistive behavior",
-      "Behavior Point Score (BPS) >4 contributes to Group B; BPS >12 supports B-High",
-      "Confirmed irreversible dementia diagnosis (Alzheimer's, vascular, Lewy body, frontotemporal) supports EARC-SDC eligibility per WAC 388-106-0033",
-      "Behaviors require staff intervention beyond redirection (1:1 supervision, behavioral care plan)"
-    ],
-    "wac_citation": "WAC 388-106-0100 (mood/behavior and behavior point score); WAC 388-106-0125 (Group B classification); WAC 388-106-0033 (specialized dementia care eligibility); DSHS Specialized Behavior Support (SBS) specialty contract",
-    "monthly_add_on_estimate_usd": 1800,
-    "disclosure_language_required": "Per RCW 70.128.280 and DSHS Form 10-409, AFH must disclose whether it accepts residents with dementia, the specific behavioral symptoms it can safely manage (e.g., agitation, resistive care, verbal aggression), and whether the home holds a Specialized Behavior Support contract. If unable to manage a behavior, the AFH must state so explicitly to support move-out or non-admission decisions."
-  },
-  {
-    "code_id": "AFH-COG-IMPAIR",
-    "code_name": "Cognitive performance impairment",
-    "clinical_criteria": [
-      "Cognitive Performance Score (CPS) 3-6 indicating moderate to severe impairment",
-      "Documented impairment in short-term memory, decision-making, daily-task comprehension, or making self understood",
-      "CPS 4-6 with clinical complexity drives Group D; CPS <4 with clinical complexity drives Group C",
-      "Requires structured cues, supervision during ADLs, or 24-hour orientation support"
-    ],
-    "wac_citation": "WAC 388-106-0090 (cognitive performance score); WAC 388-106-0125 (Group C/D classification)",
-    "monthly_add_on_estimate_usd": 900,
-    "disclosure_language_required": "Per RCW 70.128.280, AFH must disclose its capacity to provide cognitive supervision, structured routines, and dementia-friendly environment. If the home advertises 'specialty dementia care,' it must comply with WAC 388-76 special care designation requirements, including additional caregiver training in cognitive support and disorientation management."
-  },
-  {
-    "code_id": "AFH-MOOD-DEPRESS",
-    "code_name": "Mood / depression indicator",
-    "clinical_criteria": [
-      "Depression score >=14 on standardized scale (PHQ-9 or CARE depression indicator)",
-      "Crying/tearfulness 4+ days/week (per WAC 388-106-0100 indicator list)",
-      "Documented anxious complaints, repetitive verbal complaints, or expressions of unrealistic fears",
-      "Requires coordinated mental health follow-up or psychotropic medication oversight"
-    ],
-    "wac_citation": "WAC 388-106-0100 (mood/behavior; depression score is an enumerated indicator); WAC 388-106-0125 (Group B classification when combined with ADL or BPS thresholds)",
-    "monthly_add_on_estimate_usd": 500,
-    "disclosure_language_required": "Per RCW 70.128.280, AFH must disclose its capacity to support residents with diagnosed mood disorders, including coordination with outpatient mental health providers and PRN psychotropic medication administration. If the resident's mood symptoms exceed the home's behavioral support capability, the AFH must clearly state non-acceptance."
-  },
-  {
-    "code_id": "AFH-MED-ADMIN-MULTI",
-    "code_name": "Medication administration (oral, multiple medications)",
-    "clinical_criteria": [
-      "7 or more prescribed medications, or multiple daily administration times",
-      "Sliding scale or PRN protocols requiring caregiver judgment",
-      "Medication requires nurse delegation per RCW 18.79.260 / WAC 388-76-10405 (e.g., injections, eye drops by unlicensed staff)",
-      "Time-sensitive medications (Parkinson's, anti-seizure, anticoagulants)"
-    ],
-    "wac_citation": "WAC 388-106-0095 (clinical complexity includes injections); WAC 388-76-10405 (when AFH cannot provide nursing care, must contract with licensed nurse); RCW 18.79.260 (nurse delegation)",
-    "monthly_add_on_estimate_usd": 400,
-    "disclosure_language_required": "Per DSHS Form 10-409, AFH must disclose its level of medication service: (a) administration of oral/topical/eye/ear medications, (b) administration via nurse delegation, or (c) assistance only with resident self-administration. AFH must disclose whether it manages refills, secure storage, and high-risk medications (anticoagulants, opioids, insulin)."
-  },
-  {
-    "code_id": "AFH-INSULIN-BGM",
-    "code_name": "Insulin injection / blood glucose monitoring",
-    "clinical_criteria": [
-      "Insulin-dependent diabetes mellitus (type 1 or insulin-requiring type 2)",
-      "Blood glucose monitoring 2-4 times daily",
-      "Sliding-scale insulin or carbohydrate-counting regimen",
-      "History of hypoglycemic events requiring intervention"
-    ],
-    "wac_citation": "WAC 388-106-0095 (Diabetes Mellitus insulin-dependent and injections are clinical complexity factors); WAC 388-76-10405 (skilled nursing scope); RCW 18.79.260 (nurse delegation required for insulin administration by unlicensed staff)",
-    "monthly_add_on_estimate_usd": 500,
-    "disclosure_language_required": "Per RCW 70.128.280 and DSHS Form 10-409 ('Clinical Services' section: 'Blood glucose monitoring'), AFH must disclose whether it performs blood glucose monitoring and whether it administers insulin (and under what authority: delegating RN, contracted nurse, or family/resident self-administration). If insulin administration is beyond scope, the AFH must state so explicitly."
-  },
-  {
-    "code_id": "AFH-TRANSFER-2PERSON",
-    "code_name": "Two-person transfer / mechanical lift",
-    "clinical_criteria": [
-      "Total dependence (ADL score 4) for transfers per WAC 388-106-0105",
-      "Requires two-staff assist or mechanical lift (Hoyer, sit-to-stand) for bed-to-chair transfers",
-      "Cumulative ADL score >=22 supports Group E (exceptional care) classification when combined with turning/repositioning",
-      "Documented inability to bear weight or follow transfer cues"
-    ],
-    "wac_citation": "WAC 388-106-0105 (ADL scoring, transfers); WAC 388-106-0110 (exceptional care, ADL >=22); WAC 388-106-0125 (Group E)",
-    "monthly_add_on_estimate_usd": 1200,
-    "disclosure_language_required": "Per DSHS Form 10-409 ('Mobility/Transfers' section), AFH must disclose its capacity for 'one-on-one transfer assistance, use of lifts, belts, board as needed.' If the home cannot safely staff a two-person transfer (e.g., single caregiver overnight), it must disclose this limitation; admission of a two-person-transfer resident under those conditions risks WAC 388-76 enforcement action."
-  },
-  {
-    "code_id": "AFH-WANDER-EXIT",
-    "code_name": "Wandering / exit-seeking",
-    "clinical_criteria": [
-      "Exit-seeking wander (WAC 388-106-0100 behavior category 23-28, behavior value 4-5)",
-      "History of elopement or attempted elopement",
-      "Non-exit-seeking wander (category 1-8, behavior value 0.5-1) when frequent",
-      "Requires perimeter alarms, locked egress, or 1:1 line-of-sight supervision"
-    ],
-    "wac_citation": "WAC 388-106-0100 (wandering enumerated; exit-seeking carries highest behavior value); WAC 388-106-0125 (Group B classification driver); DSHS Specialized Behavior Support (SBS) contract may apply",
-    "monthly_add_on_estimate_usd": 1100,
-    "disclosure_language_required": "Per RCW 70.128.280, AFH must disclose whether the physical plant has secured/alarmed egress and whether staff coverage supports a wanderer (especially overnight). If the home holds itself out as accepting dementia/wandering residents, it must comply with WAC 388-76 special-care designation requirements. If the home cannot safely manage exit-seeking, it must state so to prevent inappropriate admission."
-  },
-  {
-    "code_id": "AFH-WOUND-CARE",
-    "code_name": "Pressure ulcer / complex wound care",
-    "clinical_criteria": [
-      "Pressure injury (any stage) per WAC 388-106-0095 clinical complexity criteria",
-      "Open lesions, stasis ulcers, or burns requiring dressing/wound care",
-      "Stage 3-4 pressure injury or unstageable wound requiring skilled-nurse-led wound protocol",
-      "Turning/repositioning program required (contributes to Group E per WAC 388-106-0110)"
-    ],
-    "wac_citation": "WAC 388-106-0095 (pressure injuries, open lesions, stasis ulcers, burns are clinical complexity); WAC 388-106-0110 (turning/repositioning + ADL >=22 = exceptional care); WAC 388-76-10405 (AFH must contract licensed nurse for wound care beyond its scope)",
-    "monthly_add_on_estimate_usd": 800,
-    "disclosure_language_required": "Per WAC 388-76-10405, if the resident requires nursing-level wound care, the AFH must either employ or contract with a licensed nurse to provide that care or arrange nurse delegation. The disclosure must state whether the home provides Stage 1-2 wound care only, or contracts for higher-acuity wound management."
-  },
-  {
-    "code_id": "AFH-INCONT-BB",
-    "code_name": "Incontinence (bowel and bladder)",
-    "clinical_criteria": [
-      "Frequent or total bladder/bowel incontinence per WAC 388-106-0095",
-      "Scheduled toileting plan or bowel program in place",
-      "Indwelling, intermittent, or external catheter",
-      "Ostomy care required"
-    ],
-    "wac_citation": "WAC 388-106-0095 (frequent/total incontinence, scheduled toileting, bowel programs, ostomy care, and catheter management are clinical complexity factors)",
-    "monthly_add_on_estimate_usd": 450,
-    "disclosure_language_required": "Per RCW 70.128.280, AFH must disclose its capacity to manage bowel and bladder incontinence, including frequency of brief changes, catheter care, ostomy care, and scheduled toileting. Ostomy and catheter care may require nurse delegation per WAC 388-76-10405."
-  },
-  {
-    "code_id": "AFH-TOILET-ASSIST",
-    "code_name": "Toileting assistance",
-    "clinical_criteria": [
-      "Extensive assistance (ADL score 3) or total dependence (ADL score 4) for toilet use per WAC 388-106-0105",
-      "Requires staff assist for transfer-to-toilet, brief changes, peri-care",
-      "Documented falls or near-falls during toileting attempts"
-    ],
-    "wac_citation": "WAC 388-106-0105 (ADL scoring: toilet use)",
-    "monthly_add_on_estimate_usd": 350,
-    "disclosure_language_required": "Per DSHS Form 10-409 ('Personal Hygiene' section: 'Assistance provided, one on one guide, pericare'), AFH must disclose level of toileting assistance (independent prompting, hands-on assist, total dependence). Disclosure must align with the negotiated care plan."
-  },
-  {
-    "code_id": "AFH-EAT-FEED",
-    "code_name": "Eating / feeding assistance",
-    "clinical_criteria": [
-      "Extensive assistance or total dependence for eating (ADL score 3-4) per WAC 388-106-0105",
-      "Swallowing problems with eating dependence per WAC 388-106-0095 (clinical complexity)",
-      "Modified-texture diet (puree, mechanical soft) or thickened liquids",
-      "Tube feeding providing >50% of calories supports Group E per WAC 388-106-0110"
-    ],
-    "wac_citation": "WAC 388-106-0105 (ADL scoring: eating); WAC 388-106-0095 (swallowing problems with eating dependence is clinical complexity); WAC 388-106-0110 (tube feeding >50% calories supports exceptional care)",
-    "monthly_add_on_estimate_usd": 500,
-    "disclosure_language_required": "Per DSHS Form 10-409 ('Nutrition/Feeding' section: 'Spoon feeding, blended diets, sugar free, fiber accommodations'), AFH must disclose feeding levels it supports: independent, set-up only, hands-on assist, spoon-feeding, and texture-modified diets. Tube feeding capability must be explicitly disclosed and requires nurse delegation under WAC 388-76-10405."
-  },
-  {
-    "code_id": "AFH-FALL-RISK",
-    "code_name": "Fall risk / fall history requiring intervention",
-    "clinical_criteria": [
-      "Two or more falls in the prior 30 days, or any fall with injury",
-      "Pathological bone fracture history per WAC 388-106-0095 (clinical complexity)",
-      "Gait instability requiring assistive device (walker, cane, wheelchair) and supervised ambulation",
-      "ADL locomotion score >=2 (limited assistance or greater) per WAC 388-106-0105",
-      "Cognitive impairment combined with mobility deficit (compound fall risk)"
-    ],
-    "wac_citation": "WAC 388-106-0105 (ADL locomotion scoring); WAC 388-106-0095 (pathological bone fracture is clinical complexity)",
-    "monthly_add_on_estimate_usd": 550,
-    "disclosure_language_required": "Per RCW 70.128.280 and DSHS Form 10-409 ('Mobility/Transfers' section: 'walker, wheelchair, one on one guide, assistance, accommodations are made'), AFH must disclose fall-prevention measures (bed alarms, low beds, perimeter monitoring), supervised ambulation availability, and whether 1:1 staffing during high-risk transfers is feasible given staffing ratios."
-  }
-]
+{
+  "_note": "These entries describe CARE acuity/rate factors used by DSHS to classify Adult Family Home residents under WAC 388-106-0090, -0095, -0100, -0105, -0110, and -0125. They are NOT standalone DSHS billing codes. Washington AFH Medicaid payment is set by (a) the DSHS CARE assessment producing a classification group (A-Low through E-High per WAC 388-106-0125) and (b) rate authorization by the DSHS Office of Rates Management; there is no per-factor monthly add-on payable as a discrete line item. monthly_add_on_estimate_usd is null in every entry for this reason. Specialty contracts — including Specialized Behavior Support (SBS), Residential Support Waiver (RSW), Expanded Community Services (ECS), Enhanced Adult Residential Care – Specialized Dementia Care (EARC-SDC, in ALFs), Meaningful Day, and Community Stability Supports (CSS) — are discrete DSHS-contracted programs that require AFH application, approval, training, and ongoing compliance. They are NOT automatically triggered by any single acuity factor (e.g., dementia behaviors alone do not entitle an AFH to SBS payment).",
+  "factors": [
+    {
+      "acuity_factor_id": "CARE-BEHAV-DEMENTIA",
+      "acuity_factor_name": "Behavioral symptom acuity factor (dementia-related behaviors)",
+      "clinical_criteria": [
+        "One or more behaviors enumerated in WAC 388-106-0100: assaultive behavior, combative during personal care, irritability/agitation not easily altered, hallucinations, delusions, yelling/screaming 4+ days/week, resistive behavior, repetitive verbal complaints",
+        "Behavior Point Score (BPS) above scoring thresholds in WAC 388-106-0125 (BPS >4 contributes to Group B; BPS >12 supports B-High)",
+        "Behaviors require staff intervention beyond redirection (1:1 supervision, structured behavioral care plan, documented intervention history)"
+      ],
+      "wac_citation": "WAC 388-106-0100 (mood/behavior and behavior point score); WAC 388-106-0125 (Group B classification driver)",
+      "monthly_add_on_estimate_usd": null,
+      "disclosure_language_required": "Per RCW 70.128.280 and DSHS Form 10-409, AFH must disclose whether it accepts residents with dementia and the specific behavioral symptoms it can safely manage (e.g., agitation, resistive care, verbal aggression). If the home cannot safely manage a behavior, the disclosure must state so. NOTE: Specialty contracts such as SBS (Specialized Behavior Support) and RSW are discrete DSHS-contracted programs requiring separate application, approval, and caregiver training; the presence of dementia behaviors does not automatically qualify an AFH for SBS/RSW reimbursement."
+    },
+    {
+      "acuity_factor_id": "CARE-COG-IMPAIR",
+      "acuity_factor_name": "Cognitive performance acuity factor",
+      "clinical_criteria": [
+        "Cognitive Performance Score (CPS) per WAC 388-106-0090 indicating moderate to severe impairment",
+        "Documented deficits in short-term memory, daily decision-making, comprehension, or ability to make self understood",
+        "Per WAC 388-106-0125, CPS 4-6 combined with clinical complexity drives Group D; CPS below 4 with clinical complexity drives Group C",
+        "Requires structured cues, supervision during ADLs, or 24-hour orientation support"
+      ],
+      "wac_citation": "WAC 388-106-0090 (Cognitive Performance Score); WAC 388-106-0125 (Group C/D classification driver)",
+      "monthly_add_on_estimate_usd": null,
+      "disclosure_language_required": "Per RCW 70.128.280, AFH must disclose its capacity to provide cognitive supervision, structured routines, and a dementia-friendly environment. If the home advertises specialty dementia care, it must comply with WAC 388-76 special-care designation requirements, including caregiver training in cognitive support and disorientation management."
+    },
+    {
+      "acuity_factor_id": "CARE-MOOD-DEPRESS",
+      "acuity_factor_name": "Mood/depression acuity factor",
+      "clinical_criteria": [
+        "Depression indicator at or above the threshold used in WAC 388-106-0100 mood/behavior scoring",
+        "Crying/tearfulness 4+ days/week, anxious complaints, repetitive verbal complaints, or expressions of unrealistic fears (enumerated indicators in WAC 388-106-0100)",
+        "Coordinated mental health follow-up or psychotropic medication oversight required"
+      ],
+      "wac_citation": "WAC 388-106-0100 (mood indicators including depression score); WAC 388-106-0125 (Group B threshold when combined with ADL or BPS)",
+      "monthly_add_on_estimate_usd": null,
+      "disclosure_language_required": "Per RCW 70.128.280, AFH must disclose its capacity to support residents with diagnosed mood disorders, including coordination with outpatient mental health providers and PRN psychotropic medication administration. If the resident's mood symptoms exceed the home's support capability, the disclosure must state non-acceptance."
+    },
+    {
+      "acuity_factor_id": "CARE-MED-ADMIN-MULTI",
+      "acuity_factor_name": "Medication administration burden (operational factor; injections are a CARE clinical-complexity criterion)",
+      "clinical_criteria": [
+        "Injections — including insulin and other parenteral medications — are enumerated as clinical complexity in WAC 388-106-0095",
+        "Operational considerations not enumerated in WAC 388-106-0095: number of oral medications, multiple daily administration times, sliding scale or PRN protocols, time-sensitive regimens (Parkinson's, anti-seizure, anticoagulants). These influence staffing burden but are NOT scored CARE acuity factors.",
+        "Per WAC 388-76-10405, medications requiring administration beyond the AFH's nursing-care scope (e.g., injections by unlicensed staff) require nurse delegation under RCW 18.79.260"
+      ],
+      "wac_citation": "WAC 388-106-0095 (clinical complexity enumerates injections; oral multi-medication administration is an operational consideration, not a scored CARE factor)",
+      "monthly_add_on_estimate_usd": null,
+      "disclosure_language_required": "Per DSHS Form 10-409, AFH must disclose its level of medication service: (a) administration of oral/topical/eye/ear medications, (b) administration via nurse delegation under WAC 388-76-10405 and RCW 18.79.260, or (c) assistance only with resident self-administration. The home must disclose whether it manages refills, secure storage, and high-risk medications (anticoagulants, opioids, insulin)."
+    },
+    {
+      "acuity_factor_id": "CARE-INSULIN-BGM",
+      "acuity_factor_name": "Insulin / blood glucose monitoring acuity factor",
+      "clinical_criteria": [
+        "Insulin-dependent diabetes mellitus (type 1 or insulin-requiring type 2) — Diabetes Mellitus is enumerated in the clinical complexity list in WAC 388-106-0095",
+        "Injections are independently enumerated in WAC 388-106-0095",
+        "Blood glucose monitoring 2-4 times daily; sliding-scale insulin or carbohydrate-counting regimen",
+        "History of hypoglycemic events requiring intervention"
+      ],
+      "wac_citation": "WAC 388-106-0095 (Diabetes Mellitus — insulin and non-insulin dependent — and injections are enumerated clinical complexity factors)",
+      "monthly_add_on_estimate_usd": null,
+      "disclosure_language_required": "Per RCW 70.128.280 and DSHS Form 10-409 (Clinical Services: 'Blood glucose monitoring'), AFH must disclose whether it performs blood glucose monitoring and whether it administers insulin, and under what authority (delegating RN, contracted nurse, or family/resident self-administration). Insulin administration by unlicensed staff requires nurse delegation per WAC 388-76-10405 and RCW 18.79.260. If insulin administration is beyond scope, the AFH must state so."
+    },
+    {
+      "acuity_factor_id": "CARE-TRANSFER-2PERSON",
+      "acuity_factor_name": "Transfer-dependence acuity factor (two-person assist / mechanical lift)",
+      "clinical_criteria": [
+        "Total dependence (ADL self-performance score 4) for transfers per WAC 388-106-0105",
+        "Requires two-staff assist or mechanical lift (Hoyer, sit-to-stand) for bed-to-chair transfers (operational requirement; WAC 388-106-0105 scores transfer dependence but does not separately code two-person assist)",
+        "Cumulative ADL score >=22 combined with turning/repositioning program supports Group E (exceptional care) per WAC 388-106-0110",
+        "Documented inability to bear weight or follow transfer cues"
+      ],
+      "wac_citation": "WAC 388-106-0105 (ADL transfer scoring); WAC 388-106-0110 (exceptional-care criteria require ADL >=22 and turning/repositioning); WAC 388-106-0125 (Group E classification)",
+      "monthly_add_on_estimate_usd": null,
+      "disclosure_language_required": "Per DSHS Form 10-409 (Mobility/Transfers), AFH must disclose its capacity for one-on-one transfer assistance, use of lifts, belts, and transfer boards. If the home cannot safely staff a two-person transfer (e.g., single caregiver overnight), it must disclose this limitation."
+    },
+    {
+      "acuity_factor_id": "CARE-WANDER-EXIT",
+      "acuity_factor_name": "Wandering / exit-seeking acuity factor",
+      "clinical_criteria": [
+        "Exit-seeking wandering, enumerated in WAC 388-106-0100 (behavior categories 23-28, carrying behavior values 4-5)",
+        "Non-exit-seeking wandering, enumerated in WAC 388-106-0100 (behavior categories 1-8, behavior values 0.5-1)",
+        "History of elopement or attempted elopement",
+        "Requires perimeter alarms, locked egress, or 1:1 line-of-sight supervision"
+      ],
+      "wac_citation": "WAC 388-106-0100 (wandering enumerated; exit-seeking carries the highest behavior values); WAC 388-106-0125 (Group B classification driver)",
+      "monthly_add_on_estimate_usd": null,
+      "disclosure_language_required": "Per RCW 70.128.280, AFH must disclose whether the physical plant has secured/alarmed egress and whether staff coverage supports a wanderer (especially overnight). If the home holds itself out as accepting dementia/wandering residents, it must comply with WAC 388-76 special-care designation requirements. SBS or RSW specialty contracts may apply to exit-seeking residents but require separate DSHS application and approval — they are not automatic."
+    },
+    {
+      "acuity_factor_id": "CARE-WOUND-CARE",
+      "acuity_factor_name": "Pressure injury / complex wound acuity factor",
+      "clinical_criteria": [
+        "Pressure injuries (all stages), open lesions, stasis ulcers, and burns requiring dressing/wound care — all enumerated in WAC 388-106-0095 clinical complexity",
+        "Stage 3-4 pressure injury or unstageable wound requiring skilled-nurse-led wound protocol",
+        "Turning/repositioning program required (contributes to Group E classification per WAC 388-106-0110 when combined with ADL >=22)"
+      ],
+      "wac_citation": "WAC 388-106-0095 (pressure injuries, open lesions, stasis ulcers, burns — clinical complexity); WAC 388-106-0110 (turning/repositioning program plus ADL >=22 supports exceptional care)",
+      "monthly_add_on_estimate_usd": null,
+      "disclosure_language_required": "Per WAC 388-76-10405, if the resident requires nursing-level wound care, the AFH must either employ or contract with a licensed nurse to provide that care, or arrange nurse delegation. The disclosure must state the wound-care complexity the home accepts (e.g., Stage 1-2 only, or higher stages with contracted nurse)."
+    },
+    {
+      "acuity_factor_id": "CARE-INCONT-BB",
+      "acuity_factor_name": "Bowel/bladder incontinence acuity factor",
+      "clinical_criteria": [
+        "Frequent or total bladder and/or bowel incontinence per WAC 388-106-0095",
+        "Scheduled toileting plan or bowel program in place (both enumerated in WAC 388-106-0095)",
+        "Indwelling, intermittent, or external catheter (enumerated in WAC 388-106-0095)",
+        "Ostomy care required (enumerated in WAC 388-106-0095)"
+      ],
+      "wac_citation": "WAC 388-106-0095 (frequent/total incontinence, scheduled toileting plans, bowel programs, ostomy care, and catheter management are clinical complexity factors)",
+      "monthly_add_on_estimate_usd": null,
+      "disclosure_language_required": "Per RCW 70.128.280, AFH must disclose its capacity to manage bowel and bladder incontinence, including frequency of brief changes, catheter care, ostomy care, and scheduled toileting. Catheter and ostomy care may require nurse delegation under WAC 388-76-10405."
+    },
+    {
+      "acuity_factor_id": "CARE-TOILET-ASSIST",
+      "acuity_factor_name": "Toileting ADL acuity factor",
+      "clinical_criteria": [
+        "Extensive assistance (ADL self-performance score 3) or total dependence (score 4) for toilet use per WAC 388-106-0105",
+        "Requires staff assist for transfer-to-toilet, brief changes, peri-care",
+        "Documented falls or near-falls during toileting attempts"
+      ],
+      "wac_citation": "WAC 388-106-0105 (ADL scoring — toilet use)",
+      "monthly_add_on_estimate_usd": null,
+      "disclosure_language_required": "Per DSHS Form 10-409 (Personal Hygiene: 'assistance provided, one on one guide, pericare'), AFH must disclose its level of toileting assistance (independent prompting, hands-on assist, or total dependence). The disclosure must align with the negotiated care plan."
+    },
+    {
+      "acuity_factor_id": "CARE-EAT-FEED",
+      "acuity_factor_name": "Eating/feeding ADL acuity factor",
+      "clinical_criteria": [
+        "Extensive assistance or total dependence for eating (ADL self-performance score 3-4) per WAC 388-106-0105",
+        "Swallowing problems with eating dependence — enumerated in WAC 388-106-0095 clinical complexity",
+        "Modified-texture diet (puree, mechanical soft) or thickened liquids (operational consideration)",
+        "Tube feeding providing >50% of calories supports Group E exceptional-care classification per WAC 388-106-0110"
+      ],
+      "wac_citation": "WAC 388-106-0105 (ADL scoring — eating); WAC 388-106-0095 (swallowing problems with eating dependence — clinical complexity); WAC 388-106-0110 (tube feeding >50% of calories supports exceptional care)",
+      "monthly_add_on_estimate_usd": null,
+      "disclosure_language_required": "Per DSHS Form 10-409 (Nutrition/Feeding: 'Spoon feeding, blended diets, sugar free, fiber accommodations'), AFH must disclose feeding levels it supports: independent, set-up only, hands-on assist, spoon-feeding, and texture-modified diets. Tube feeding capability must be explicitly disclosed and may require nurse delegation under WAC 388-76-10405."
+    },
+    {
+      "acuity_factor_id": "CARE-FALL-RISK",
+      "acuity_factor_name": "Fall risk acuity factor (composite — not separately enumerated in CARE)",
+      "clinical_criteria": [
+        "Pathological bone fracture is enumerated in WAC 388-106-0095 clinical complexity",
+        "ADL locomotion score (locomotion in room, locomotion outside room, walk in room) per WAC 388-106-0105 — the highest of the three contributes to ADL totals",
+        "Operational clinical context (not separately enumerated in CARE): two or more falls in the prior 30 days, fall with injury, gait instability requiring an assistive device, cognitive-mobility compound risk",
+        "Fall risk per se is not an independent CARE acuity factor — it manifests through enumerated factors (locomotion ADL, pathological bone fracture, and CPS where cognition contributes)"
+      ],
+      "wac_citation": "WAC 388-106-0095 (pathological bone fracture — clinical complexity); WAC 388-106-0105 (ADL locomotion scoring)",
+      "monthly_add_on_estimate_usd": null,
+      "disclosure_language_required": "Per RCW 70.128.280 and DSHS Form 10-409 (Mobility/Transfers), AFH must disclose its fall-prevention measures (bed alarms, low beds, perimeter monitoring), supervised ambulation availability, and whether 1:1 staffing during high-risk transfers is feasible given staffing ratios."
+    }
+  ]
+}
