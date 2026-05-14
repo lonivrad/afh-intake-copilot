@@ -93,7 +93,9 @@ def run_baseline(
 
     response = client.messages.create(
         model=MODEL_ID,
-        max_tokens=8192,
+        # 16k headroom — case_06-equivalent complex outputs (all three
+        # conditions + nine acuity factors) can otherwise truncate.
+        max_tokens=16000,
         system=BASELINE_SYSTEM,
         tools=[
             {

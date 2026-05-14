@@ -1,0 +1,73 @@
+
+=== case_01: Diabetes only, simple: well-controlled oral-managed type 2, no acuity factors triggered. ===
+  full: P=0.00 R=1.00 halluc=0 interview_q=7 (118.9s)
+  baseline: P=0.00 R=1.00 (73.3s)
+
+=== case_02: Dementia only, moderate stage with exit-seeking and sundowning. ===
+  full: P=0.60 R=1.00 halluc=0 interview_q=12 (202.0s)
+  baseline: P=0.50 R=1.00 (87.2s)
+
+=== case_03: Fall risk only, recent fall history with FRIDs and inconsistent assistive-device use. ===
+  full: P=0.25 R=1.00 halluc=0 interview_q=10 (184.9s)
+  baseline: P=0.20 R=1.00 (81.7s)
+
+=== case_04: Diabetes + dementia: insulin-dependent type 2 with moderate Alzheimer's and resistance to injections. ===
+  full: P=0.80 R=1.00 halluc=0 interview_q=22 (262.3s)
+  baseline: P=0.67 R=1.00 (96.2s)
+
+=== case_05: Dementia + fall risk: advanced Alzheimer's with recent falls, FRID polypharmacy, and cognitive-mobility mismatch. ===
+  full: P=0.50 R=1.00 halluc=0 interview_q=23 (266.2s)
+  baseline: P=0.50 R=1.00 (101.6s)
+
+=== case_06: All three conditions: complex multi-system acuity with prior facility discharge for inability to manage. ===
+  full: P=0.90 R=1.00 halluc=0 interview_q=33 (389.2s)
+  baseline FAILED: 1 validation error for BaselineOutput
+risk_register
+  Field required [type=missing, input_value={'care_plan': {'summary':...view_required': True}]}}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.13/v/missing
+Traceback (most recent call last):
+  File "/Users/ilonaradch/code/afh-intake-copilot/evals/run_evals.py", line 486, in main
+    base_out = run_baseline_pipeline(case, dshs_rules)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ilonaradch/code/afh-intake-copilot/evals/run_evals.py", line 193, in run_baseline_pipeline
+    out = run_baseline(
+          ^^^^^^^^^^^^^
+  File "/Users/ilonaradch/code/afh-intake-copilot/pipeline/baseline.py", line 114, in run_baseline
+    out = BaselineOutput.model_validate(tool_block.input)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ilonaradch/code/afh-intake-copilot/venv/lib/python3.12/site-packages/pydantic/main.py", line 732, in model_validate
+    return cls.__pydantic_validator__.validate_python(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+pydantic_core._pydantic_core.ValidationError: 1 validation error for BaselineOutput
+risk_register
+  Field required [type=missing, input_value={'care_plan': {'summary':...view_required': True}]}}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.13/v/missing
+
+=== case_07: Source disagreement (falls): family reports frequent home falls; discharge documents steady ambulation with walker. ===
+  full: P=0.25 R=1.00 halluc=0 interview_q=18 (233.2s)
+  baseline: P=0.20 R=1.00 (88.9s)
+
+=== case_08: Source disagreement (cognition): family insists resident is cognitively intact; discharge documents persistent confusion and disorientation. ===
+  full: P=0.40 R=1.00 halluc=0 interview_q=21 (267.5s)
+  baseline: P=0.33 R=1.00 (102.1s)
+
+================================================================================
+COMPARISON TABLE
+================================================================================
+case        full P  full R  base P  base R  halluc f  halluc b  disagr f  disagr b  gap P f  gap P b
+----------------------------------------------------------------------------------------------------
+case_01       0.00    1.00    0.00    1.00         0       n/a        no       yes     0.00     0.00
+case_02       0.60    1.00    0.50    1.00         0       n/a       yes       yes     0.83     0.60
+case_03       0.25    1.00    0.20    1.00         0       n/a       yes       yes     0.75     0.60
+case_04       0.80    1.00    0.67    1.00         0       n/a       yes       yes     0.86     1.00
+case_05       0.50    1.00    0.50    1.00         0       n/a        no       yes     1.00     1.00
+case_06       0.90    1.00     n/a     n/a         0       n/a       yes       n/a     0.90      n/a
+case_07       0.25    1.00    0.20    1.00         0       n/a       yes       yes     0.60     0.80
+case_08       0.40    1.00    0.33    1.00         0       n/a       yes       yes     1.00     1.00
+----------------------------------------------------------------------------------------------------
+avg           0.46    1.00    0.34    1.00      0.00       n/a                         0.74     0.71
+
+Results saved to:
+  /Users/ilonaradch/code/afh-intake-copilot/evals/results/results_full.json
+  /Users/ilonaradch/code/afh-intake-copilot/evals/results/results_baseline.json
+  /Users/ilonaradch/code/afh-intake-copilot/evals/results/comparison_table.txt
