@@ -109,6 +109,80 @@ def _first_two_sentences(text: str) -> str:
         return ""
     parts = re.split(r"(?<=[.!?])\s+", text.strip())
     return " ".join(parts[:2]).strip()
+
+
+# ===== Per-tab executive-summary helpers (Step 10.10) =====
+
+
+_CARE_SECTION_LABELS = [
+    ("diabetes_care", "diabetes"),
+    ("dementia_care", "dementia"),
+    ("fall_risk_care", "fall risk"),
+    ("adl_support", "ADLs"),
+    ("medication_management", "medications"),
+]
+
+
+def _care_plan_summary(care_plan: dict) -> str:
+    total = sum(
+        len(care_plan.get(k, [])) for k, _ in _CARE_SECTION_LABELS
+    )
+    present = [
+        label for k, label in _CARE_SECTION_LABELS if care_plan.get(k)
+    ]
+    if not present:
+        return f"Care Plan Summary: {total} care items."
+    return (
+        f"Care Plan Summary: {total} care items across "
+        f"{', '.join(present)} — all grounded in "
+        "discharge/family/operator evidence."
+    )
+
+
+def _short_factor_label(name: str) -> str:
+    cleaned = name.replace(" acuity factor", "")
+    if "(" in cleaned:
+        cleaned = cleaned.split("(")[0].strip()
+    return cleaned.lower()
+
+
+def _acuity_summary(acuity_recs: dict) -> str:
+    recs = acuity_recs.get("recommendations", [])
+    total = len(recs)
+    if total == 0:
+        return "Acuity Summary: 0 CARE factors recommended."
+    top = recs[:5]
+    items = ", ".join(
+        f"{_short_factor_label(r['acuity_factor_name'])} ({r['confidence']})"
+        for r in top
+    )
+    extra = f" (+{total - 5} more)" if total > 5 else ""
+    plural = "s" if total != 1 else ""
+    return (
+        f"Acuity Summary: {total} CARE factor{plural} recommended: "
+        f"{items}{extra}."
+    )
+
+
+def _risk_summary(risk_register: dict) -> str:
+    gaps = risk_register.get("gaps", [])
+    total = len(gaps)
+    if total == 0:
+        return "Risk Summary: 0 capability gaps."
+    sev_count = {"high": 0, "medium": 0, "low": 0}
+    for g in gaps:
+        s = g.get("severity")
+        if s in sev_count:
+            sev_count[s] += 1
+    parts = []
+    if sev_count["high"]:
+        parts.append(f"{sev_count['high']} high severity")
+    if sev_count["medium"]:
+        parts.append(f"{sev_count['medium']} medium")
+    if sev_count["low"]:
+        parts.append(f"{sev_count['low']} low")
+    breakdown = ", ".join(parts) if parts else "severity unspecified"
+    return f"Risk Summary: {total} capability gaps: {breakdown}."
 for _k, _v in DEFAULT_STATE.items():
     st.session_state.setdefault(_k, _v)
 
@@ -575,12 +649,17 @@ elif stage == "synthesis_done":
             renderer(artifacts[key], profile)
 
     with tab_care:
+        st.info(_care_plan_summary(artifacts["care_plan"]))
         _render_in_tab("care_plan", _render_care_plan)
     with tab_acuity:
+        st.info(
+            _acuity_summary(artifacts["acuity_factor_recommendations"])
+        )
         _render_in_tab(
             "acuity_factor_recommendations", _render_acuity_recs
         )
     with tab_risk:
+        st.warning(_risk_summary(artifacts["risk_register"]))
         _render_in_tab("risk_register", _render_risk_register)
 
     # Profile — developer telemetry moved here from the sidebar.
