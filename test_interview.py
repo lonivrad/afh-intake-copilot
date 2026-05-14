@@ -130,10 +130,25 @@ def main() -> None:
         print(
             f"Q{answers_given:2d}  {node['node_id']:<28}  "
             f"shape={node['expected_answer_shape']:<16}  "
-            f"parsed={session._last_parsed_value!r}"
+            f"parsed={session._last_parsed_value!r:<32}  "
+            f"via {session._last_parse_method}"
         )
 
     print(f"\nTotal questions answered: {answers_given}")
+    total_parses = session._local_parse_count + session._fallback_parse_count
+    local_pct = (
+        100.0 * session._local_parse_count / total_parses
+        if total_parses
+        else 0.0
+    )
+    print(
+        f"Parse methods: local={session._local_parse_count} ({local_pct:.0f}%), "
+        f"fallback (Claude)={session._fallback_parse_count} ({100 - local_pct:.0f}%)"
+    )
+    print(
+        f"Stage-2 API calls avoided by local parser: "
+        f"{session._local_parse_count} of {total_parses}"
+    )
     operator_snippets = [
         s for s in profile.evidence_snippets if s.source == "operator"
     ]
