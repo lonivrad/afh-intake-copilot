@@ -185,61 +185,62 @@ just over-recommends less.
 - **One case where the baseline matched or beat the full pipeline.** On **case_04** (diabetes + dementia, insulin-resistance behavior), the baseline scored **gap precision 1.00 vs the full pipeline's 0.86**. The baseline's risk register had fewer, tighter gaps that all mapped cleanly to expected categories; the full pipeline added an extra borderline gap on injection-time staffing scheduling that didn't match a ground-truth expected gap. The full pipeline still beat the baseline on acuity-factor precision (0.80 vs 0.67) and disagreement detection on this case.
 - **Input the system explicitly does not handle.** Scanned or OCR'd PDF disclosures (`pypdf` extracts text from native PDFs only — image-based scans return empty); non-Washington-State Medicaid intake (the DSHS rule reference, WAC citations, and specialty-contract names are all WA-specific); real PII in inputs (the pipeline is designed for synthetic test data, and Stage 1's PII hygiene rule is enforced by prompt rather than by a structural redaction step).
 
-## 4. Why this is not "just ChatGPT"
+## 4. What Makes This System Different from a One-Shot LLM
 
-- **Structured branching interview.** Stage 2 walks
-  `data/trees/{diabetes,dementia,fall_risk}.json` deterministically.
+- **Deterministic branching interview.** Stage 2 walks
+  `data/trees/{diabetes,dementia,fall_risk}.json` as a state machine.
   Each node specifies `expected_answer_shape`, `answer_options`,
   `updates_profile_field`, and `next_node_logic` with conditional
-  `goto` edges. The tree controls flow; the LLM parses each answer
-  into the typed value the node demands, but does not pick the next
-  question. A plain ChatGPT session has no analogue of this — every
-  branch is an unforced choice for the model.
+  `goto` edges. Flow control belongs to the tree; the LLM parses
+  each operator answer into the typed value the current node demands.
+  Branching is reproducible across runs and auditable as JSON.
 - **Evidence-grounded snippet IDs.** Every populated field in
   `ResidentProfile` is paired with at least one `EvidenceSnippet`
   (schema in `pipeline/extraction.py`: `snippet_id`, `claim`,
-  `source ∈ {discharge | family | operator}`, `verbatim_text`).
-  Every claim in the care plan, acuity-factor recommendations, and
-  risk register cites those IDs via `evidence_snippet_ids` /
-  `resident_need_evidence` with Pydantic `min_length=1`. A claim
-  without supporting evidence fails validation and is rejected.
+  `source ∈ {discharge | family | operator}`, `verbatim_text`). The
+  care plan, acuity-factor recommendations, and risk register
+  reference those IDs through `evidence_snippet_ids` and
+  `resident_need_evidence` fields constrained with Pydantic
+  `min_length=1`, so unsupported claims fail validation at tool-call
+  time rather than reaching the operator.
 - **Disclosure-vs-resident cross-checking.** The AFH disclosure of
-  services is loaded as a first-class input alongside the resident
-  artifacts. Each acuity-factor recommendation carries either a
-  `disclosure_support_snippet` (verbatim quote) or
-  `disclosure_gap_flagged = true`. The risk register
-  (`CapabilityGap`) explicitly compares each documented resident
-  need to disclosure language and assigns severity + a verbatim
-  disclosure quote when available.
+  services is a first-class Stage 3 input. Each acuity-factor
+  recommendation carries either a `disclosure_support_snippet`
+  (verbatim quote from the disclosure) or
+  `disclosure_gap_flagged = true`. The capability-gap risk register
+  (`CapabilityGap`) emits one entry per documented resident need that
+  lacks supporting disclosure language, with severity, suggested
+  action, and the verbatim disclosure quote where one exists.
 - **Operator-facing decision layer.** `generate_intake_decision`
-  (Stage 4 in `pipeline/synthesis.py`) emits an `IntakeDecision` with
-  three enumerated recommendations
-  (`accept` / `accept_with_conditions` / `hold_for_review`), pre-
-  admission conditions, family-call talking points, and
-  `EvidenceRef` entries pointing only to existing snippet /
-  acuity-factor / risk-register-entry IDs. The deterministic
-  recommendation rule (any high-severity gap → hold) is encoded in
-  the system prompt and the model executes it as a re-organizer, not
-  as a reasoner over fresh inputs.
+  (Stage 4 in `pipeline/synthesis.py`) consumes only the three Stage
+  3 artifacts plus the profile's source-disagreement list — never the
+  source documents — and emits an `IntakeDecision` with one of three
+  enumerated recommendations
+  (`accept` / `accept_with_conditions` / `hold_for_review`),
+  pre-admission conditions, family-call talking points, and
+  `EvidenceRef` entries pointing exclusively to existing snippet,
+  acuity-factor, or risk-register-entry IDs. The recommendation logic
+  (any high-severity gap → `hold_for_review`; else any disclosure
+  gap → `accept_with_conditions`; else `accept`) is encoded as a
+  deterministic rule in the Stage 4 system prompt.
 
-**Concrete numbers from the actual system.**
+**Measured against the eight-case evaluation.**
 
-- A single intake walk on **case_04** (diabetes + dementia) produced
-  in the committed eval: **22 structured operator interview
-  responses** across **2 clinical conditions**, **49 evidence
-  snippets** extracted from discharge + family + operator answers,
-  **1 AFH Disclosure of Services document** cross-checked against
-  resident needs, **5 acuity factors** evaluated against the WAC
-  388-106 criteria catalog, **7 disclosure gaps** identified and
-  severity-ranked, and **1 unresolved source disagreement**
-  preserved for clinical review. The provenance box in the Summary
-  tab surfaces these counts live to the operator.
-- Across all 8 cases, the staged pipeline holds **+0.07 macro
-  acuity-factor precision** over the baseline (0.46 vs 0.39),
-  **+0.11 capability-gap recall** (0.96 vs 0.85), **+2 correct
-  disagreement determinations** (4 of 8 vs 2 of 8), and **0
-  hallucinated evidence references** across every case while the
-  baseline has no structural way to be measured on that axis.
+- A single intake walk on **case_04** (diabetes + dementia) produced:
+  **22 structured operator interview responses** across **2 clinical
+  conditions**, **49 evidence snippets** indexed across discharge,
+  family, and operator sources, **1 AFH Disclosure of Services
+  document** cross-checked against resident needs, **5 acuity
+  factors** evaluated against the WAC 388-106 catalog, **7 disclosure
+  gaps** with severity ranking, and **1 unresolved source
+  disagreement** preserved across the artifacts. The Summary tab's
+  provenance box surfaces these counts live.
+- Across all 8 cases: macro acuity-factor precision **0.46 vs 0.39**
+  (Δ +0.07), capability-gap recall **0.96 vs 0.85** (Δ +0.11),
+  source-disagreement detection correct on **4 of 8 vs 2 of 8**, and
+  **0 hallucinated evidence references** in the staged pipeline.
+  The baseline has no structural evidence layer against which to
+  measure hallucination.
 
 ## 5. Artifact snapshots
 
