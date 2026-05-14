@@ -312,3 +312,133 @@ def generate_risk_register(
     tool_block = next(b for b in response.content if b.type == "tool_use")
     reg = RiskRegister.model_validate(tool_block.input)
     return reg.model_dump()
+
+
+# ===== generate_intake_decision (Stage 4 — operator-facing decision layer) =====
+
+
+class EvidenceRef(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    ref_type: Literal["snippet", "acuity_factor", "risk_register_entry"]
+    ref_id: str
+
+
+class IntakeDecision(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    recommendation: Literal[
+        "accept",
+        "accept_with_conditions",
+        "hold_for_review",
+    ]
+    rationale: str
+    conditions_before_admission: list[str] = Field(min_length=1, max_length=5)
+    family_call_talking_points: list[str] = Field(min_length=1, max_length=5)
+    evidence_references: list[EvidenceRef] = Field(min_length=1)
+
+
+DECISION_LAYER_SYSTEM = """You are the Stage 4 INTAKE DECISION layer for an Adult Family Home (AFH) intake pipeline. You consume four already-produced artifacts and emit a single structured intake recommendation.
+
+YOU ARE A RE-ORGANIZER, NOT A CLINICAL REASONER. Every condition and talking point you produce must already appear (or be straightforwardly derivable) from the care plan, acuity-factor recommendations, or risk register inputs. The only new content you produce is sentence structure and prioritization. Do not invent new clinical findings or new evidence.
+
+YOU CANNOT access discharge summaries, family notes, the AFH disclosure text, or tree files. You can ONLY reason over:
+- the care_plan
+- the acuity_factor_recommendations
+- the risk_register (each gap is annotated with a gap_id)
+- the profile_summary (evidence snippet IDs and any source disagreements)
+
+DETERMINISTIC RECOMMENDATION LOGIC (apply top-to-bottom — stop at the first that matches):
+
+1. hold_for_review — choose this if ANY of:
+   a. any risk_register gap has severity == "high"
+   b. there is an unresolved source disagreement that materially affects admission safety (e.g., disagreement about cognition, fall pattern, or insulin/medication scope)
+   c. an acuity factor has disclosure_gap_flagged == true on a critical capability (insulin administration, secured-egress dementia care, two-person transfer, complex wound care, behavioral support)
+
+2. accept_with_conditions — choose this only if hold_for_review does NOT apply AND any of:
+   a. one or more medium- or low-severity risk_register gaps
+   b. one or more acuity factors with disclosure_gap_flagged == true (non-critical capability)
+
+3. accept — choose this only if:
+   a. no high-severity gaps
+   b. no disclosure gaps
+   c. no unresolved source disagreements that affect admission
+
+OUTPUT FIELDS:
+
+- rationale: 2-4 sentences in plain language for an AFH operator. Reference the artifacts that drove the choice; do not introduce new clinical content.
+
+- conditions_before_admission: 1-5 concrete pre-admission action items. Each item should be drawn from a risk_register gap's suggested_next_action (or missing_or_weak_support), or from a disclosure-gap acuity factor. Each must be: concise (under 25 words), operator-facing (something the AFH must do), action-oriented (verb-led sentence). If the recommendation is "accept", still provide at least one item — typical pre-admission steps already implied in the care plan (e.g., final paperwork sign-off, medication-list reconciliation) are acceptable as long as they trace to existing artifact content.
+
+- family_call_talking_points: 1-5 plain-language bullets an AFH operator could say during the placement call. No legal disclaimers. No clinical jargon unless unavoidable. Each must reference something already in the care plan, acuity recommendations, or risk register — do not invent.
+
+- evidence_references: at least one EvidenceRef. Cite ONLY existing IDs:
+  - ref_type="snippet" + ref_id matching a snippet_id from profile_summary.evidence_snippet_ids
+  - ref_type="acuity_factor" + ref_id matching an acuity_factor_id from acuity_factor_recommendations.recommendations
+  - ref_type="risk_register_entry" + ref_id matching a gap_id from risk_register.gaps
+
+Then call the record_intake_decision tool."""
+
+
+def generate_intake_decision(
+    care_plan: dict,
+    acuity_factor_recommendations: dict,
+    risk_register: dict,
+    profile: ResidentProfile,
+) -> dict:
+    """Produce a single operator-facing intake recommendation.
+
+    Reasons ONLY over the four supplied artifacts; cannot access source
+    documents. Each risk-register entry is annotated with a synthetic
+    gap_NN id at call time so the model can reference gaps by ID.
+    """
+    # Inject synthetic gap_id on each risk-register entry (additive only —
+    # the underlying risk_register dict is not mutated).
+    gaps_with_ids = [
+        {**gap, "gap_id": f"gap_{i:02d}"}
+        for i, gap in enumerate(risk_register.get("gaps", []))
+    ]
+    risk_register_view = {**risk_register, "gaps": gaps_with_ids}
+
+    profile_summary = {
+        "evidence_snippet_ids": [s.snippet_id for s in profile.evidence_snippets],
+        "source_disagreements": [
+            {
+                "field": d.field,
+                "discharge_claim": d.discharge_claim,
+                "family_claim": d.family_claim,
+            }
+            for d in profile.source_disagreements
+        ],
+    }
+
+    user_content = (
+        f"=== CARE PLAN ===\n{json.dumps(care_plan, indent=2)}\n\n"
+        f"=== ACUITY FACTOR RECOMMENDATIONS ===\n"
+        f"{json.dumps(acuity_factor_recommendations, indent=2)}\n\n"
+        f"=== RISK REGISTER (each gap annotated with gap_id) ===\n"
+        f"{json.dumps(risk_register_view, indent=2)}\n\n"
+        f"=== PROFILE SUMMARY ===\n{json.dumps(profile_summary, indent=2)}\n\n"
+        "Call the record_intake_decision tool with the structured decision."
+    )
+
+    response = _client().messages.create(
+        model=MODEL_ID,
+        max_tokens=2048,
+        system=DECISION_LAYER_SYSTEM,
+        tools=[
+            {
+                "name": "record_intake_decision",
+                "description": (
+                    "Record the structured intake recommendation derived "
+                    "solely from the supplied artifacts. No new clinical "
+                    "findings; evidence references must use existing IDs."
+                ),
+                "input_schema": IntakeDecision.model_json_schema(),
+            }
+        ],
+        tool_choice={"type": "tool", "name": "record_intake_decision"},
+        messages=[{"role": "user", "content": user_content}],
+    )
+
+    tool_block = next(b for b in response.content if b.type == "tool_use")
+    decision = IntakeDecision.model_validate(tool_block.input)
+    return decision.model_dump()

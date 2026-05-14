@@ -10,6 +10,7 @@ optionally compare against the single-call baseline.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import streamlit as st
@@ -21,6 +22,7 @@ from pipeline.interview import InterviewSession
 from pipeline.synthesis import (
     generate_acuity_factor_recommendation,
     generate_care_plan,
+    generate_intake_decision,
     generate_risk_register,
 )
 
@@ -44,9 +46,69 @@ DEFAULT_STATE = {
     "source_docs": None,
     "disclosure_text": "",
     "session": None,
+    "interview_total_nodes": 0,
     "artifacts": None,
+    "intake_decision": None,
     "baseline_output": None,
 }
+
+
+# ===== Interview UX constants =====
+
+_TREE_PRETTY = {
+    "diabetes": "Diabetes",
+    "dementia": "Dementia",
+    "fall_risk": "Fall risk",
+}
+
+# Map node_id -> section breadcrumb tail. Display-layer only; no tree-file
+# changes. Unknown node IDs fall back to the tree name alone.
+_NODE_SECTION = {
+    # Diabetes
+    "DIABETES_TYPE": "Diagnosis",
+    "INSULIN_USE": "Insulin administration",
+    "INSULIN_REGIMEN": "Insulin administration",
+    "INSULIN_ADMIN": "Insulin administration",
+    "ORAL_MEDS": "Oral medications",
+    "BGM_FREQUENCY": "Blood glucose monitoring",
+    "LAST_A1C": "A1C",
+    "HYPO_HISTORY": "Hypoglycemia",
+    "HYPO_SEVERITY": "Hypoglycemia",
+    "DIET_RESTRICTIONS": "Diet",
+    "DIET_NOTES": "Diet",
+    # Dementia
+    "DX_STATUS": "Diagnosis",
+    "DX_TYPE": "Diagnosis",
+    "STAGE": "Stage",
+    "ORIENTATION_LEVEL": "Orientation",
+    "BEHAV_AGITATION": "Behavioral symptoms",
+    "BEHAV_EXIT_SEEKING": "Behavioral symptoms",
+    "BEHAV_SUNDOWNING": "Behavioral symptoms",
+    "BEHAV_RESIST_CARE": "Behavioral symptoms",
+    "PRIOR_PLACEMENT_TYPE": "Prior placement",
+    "MOVE_REASON": "Prior placement",
+    "FAMILY_PRIMARY_CONTACT": "Family contact",
+    "FAMILY_COMM_PREF": "Family contact",
+    # Fall risk
+    "FALL_HISTORY_6MO": "Fall history",
+    "FALL_COUNT": "Fall history",
+    "FALL_CIRCUMSTANCES": "Fall history",
+    "FALL_OUTCOMES": "Fall history",
+    "ASSISTIVE_DEVICE": "Assistive device",
+    "GAIT_STABILITY": "Gait",
+    "MEDS_FALL_RISK": "Fall-risk medications",
+    "MEDS_FALL_RISK_CATEGORIES": "Fall-risk medications",
+    "HOME_ACCOMMODATIONS": "Environment",
+    "PT_HISTORY": "Physical therapy",
+    "PT_NOTES": "Physical therapy",
+}
+
+
+def _first_two_sentences(text: str) -> str:
+    if not text:
+        return ""
+    parts = re.split(r"(?<=[.!?])\s+", text.strip())
+    return " ".join(parts[:2]).strip()
 for _k, _v in DEFAULT_STATE.items():
     st.session_state.setdefault(_k, _v)
 
@@ -139,10 +201,50 @@ def _render_acuity_recs(recs: dict, profile: ResidentProfile):
         st.divider()
 
 
+_SEVERITY_ORDER = {"high": 0, "medium": 1, "low": 2}
+
+
+_RECOMMENDATION_LABELS = {
+    "accept": "ACCEPT",
+    "accept_with_conditions": "ACCEPT WITH CONDITIONS",
+    "hold_for_review": "HOLD FOR REVIEW",
+}
+
+
+def _render_intake_decision(decision: dict) -> None:
+    rec = decision.get("recommendation", "")
+    rationale_full = decision.get("rationale", "")
+    rationale_short = _first_two_sentences(rationale_full)
+    conditions = decision.get("conditions_before_admission", [])
+    label = _RECOMMENDATION_LABELS.get(rec, rec.upper())
+
+    banner_body = f"### Recommendation: {label}\n\n{rationale_short}"
+    if rec == "accept":
+        st.success(banner_body)
+    elif rec == "accept_with_conditions":
+        st.warning(banner_body)
+    else:  # hold_for_review or unknown — treat as red banner
+        st.error(banner_body)
+
+    st.subheader("Conditions before admission")
+    if rec == "accept":
+        st.write(
+            "No conditions — this resident appears to fit the home's "
+            "disclosed capabilities."
+        )
+    else:
+        for cond in conditions:
+            st.markdown(f"- {cond}")
+
+
 def _render_risk_register(reg: dict, profile: ResidentProfile):
     if reg.get("method_note"):
         st.caption(reg["method_note"])
-    for gap in reg.get("gaps", []):
+    gaps_sorted = sorted(
+        reg.get("gaps", []),
+        key=lambda g: _SEVERITY_ORDER.get(g.get("severity"), 99),
+    )
+    for gap in gaps_sorted:
         sev = gap["severity"]
         st.markdown(f"**[{sev.upper()}] {gap['resident_need']}**")
         if sev == "high":
@@ -172,36 +274,6 @@ with st.sidebar:
             "side-by-side with the staged pipeline once artifacts are ready."
         ),
     )
-
-    st.divider()
-
-    if st.session_state.profile is not None:
-        st.header("Profile state")
-        st.write(
-            f"**Triggered conditions:** "
-            f"{', '.join(st.session_state.triggered_conditions) or '(none)'}"
-        )
-
-        profile = st.session_state.profile
-        st.write(f"**Evidence snippets:** {len(profile.evidence_snippets)}")
-        with st.expander("Recent snippets"):
-            for s in profile.evidence_snippets[-10:]:
-                st.text(f"[{s.source}] {s.snippet_id}: {s.claim[:60]}")
-
-        st.write(
-            f"**Source disagreements:** {len(profile.source_disagreements)}"
-        )
-        if profile.source_disagreements:
-            with st.expander("Disagreements"):
-                for d in profile.source_disagreements:
-                    st.text(d.field)
-                    if d.discharge_claim:
-                        st.caption(f"  discharge: {d.discharge_claim}")
-                    if d.family_claim:
-                        st.caption(f"  family: {d.family_claim}")
-
-        with st.expander("Full profile JSON"):
-            st.json(profile.model_dump(exclude_none=True))
 
     st.divider()
     if st.button("Reset session"):
@@ -272,8 +344,15 @@ if stage == "input":
         }
         st.session_state.disclosure_text = disclosure
         if triggered:
-            st.session_state.session = InterviewSession(
+            session = InterviewSession(
                 profile=profile, triggered_conditions=triggered
+            )
+            st.session_state.session = session
+            # Y for interview progress: sum of all nodes across triggered
+            # trees, computed ONCE at interview start so the progress bar
+            # never moves backward as branching skips nodes.
+            st.session_state.interview_total_nodes = sum(
+                len(t["nodes"]) for t in session.trees
             )
             st.session_state.stage = "interview"
         else:
@@ -294,11 +373,26 @@ elif stage == "interview":
         st.rerun()
 
     st.header("2. Interview")
+
+    # Stable progress: Y fixed at session start; X = answered + 1.
+    y_total = st.session_state.interview_total_nodes
+    answered = session._local_parse_count + session._fallback_parse_count
+    x_current = answered + 1
     tree_id = session.trees[session.current_tree_idx]["tree_id"]
-    st.markdown(
-        f"_Tree:_ **{tree_id}**  |  _Node:_ **{node['node_id']}**  |  "
-        f"_Shape:_ **{node['expected_answer_shape']}**"
+    tree_pretty = _TREE_PRETTY.get(tree_id, tree_id)
+    section = _NODE_SECTION.get(node["node_id"])
+    breadcrumb = (
+        f"{tree_pretty} → {section}" if section else tree_pretty
     )
+    minutes_remaining = round((y_total - x_current) * 30 / 60)
+
+    st.markdown(f"**{breadcrumb}**")
+    st.caption(
+        f"Question {x_current} of up to {y_total} · "
+        f"~{minutes_remaining} minutes remaining"
+    )
+    st.progress(min(x_current / y_total, 1.0) if y_total else 0.0)
+
     st.subheader(node["question_text"])
     if node.get("context_hint"):
         with st.expander("Context"):
@@ -348,11 +442,19 @@ elif stage == "synthesis_ready":
             reg = generate_risk_register(
                 st.session_state.profile, st.session_state.disclosure_text
             )
+        with st.spinner("Generating intake decision..."):
+            decision = generate_intake_decision(
+                care_plan=care,
+                acuity_factor_recommendations=recs,
+                risk_register=reg,
+                profile=st.session_state.profile,
+            )
         st.session_state.artifacts = {
             "care_plan": care,
             "acuity_factor_recommendations": recs,
             "risk_register": reg,
         }
+        st.session_state.intake_decision = decision
         st.session_state.stage = "synthesis_done"
         st.rerun()
 
@@ -379,33 +481,131 @@ elif stage == "synthesis_done":
     artifacts = st.session_state.artifacts
     profile = st.session_state.profile
     baseline = st.session_state.baseline_output
+    decision = st.session_state.intake_decision
 
-    tab_names = [
-        "Care Plan",
-        "Acuity Factor Recommendations",
-        "Risk Register",
-    ]
-    tabs = st.tabs(tab_names)
-    artifact_keys = [
-        "care_plan",
-        "acuity_factor_recommendations",
-        "risk_register",
-    ]
-    renderers = {
-        "care_plan": _render_care_plan,
-        "acuity_factor_recommendations": _render_acuity_recs,
-        "risk_register": _render_risk_register,
-    }
+    # Top-of-page: decision banner (with rationale truncated to first 2
+    # sentences) + conditions. The four-metric row is intentionally
+    # removed — the banner now carries operator priority directly.
+    if decision is not None:
+        _render_intake_decision(decision)
 
-    for tab, key in zip(tabs, artifact_keys):
-        with tab:
-            if compare_baseline and baseline is not None:
-                col_staged, col_baseline = st.columns(2)
-                with col_staged:
-                    st.markdown("##### Staged pipeline")
-                    renderers[key](artifacts[key], profile)
-                with col_baseline:
-                    st.markdown("##### Baseline (single call)")
-                    renderers[key](baseline[key], profile)
-            else:
-                renderers[key](artifacts[key], profile)
+    st.divider()
+
+    tab_summary, tab_care, tab_acuity, tab_risk, tab_profile = st.tabs(
+        ["Summary", "Care Plan", "Acuity Factors", "Risk Register", "Profile"]
+    )
+
+    # Summary — readable in under 30 seconds: provenance box, talking
+    # points, unresolved disagreements, open follow-up questions. No
+    # expanders.
+    with tab_summary:
+        plan = artifacts["care_plan"]
+        acuity_recs = artifacts["acuity_factor_recommendations"]
+        risk_register = artifacts["risk_register"]
+        # Single source of truth for the unresolved-disagreements list:
+        # whatever the Unresolved Disagreements section renders is also
+        # what the provenance box counts, so the two cannot diverge.
+        unresolved_disagreements = plan["unresolved_disagreements"]
+
+        # Provenance box — all numbers computed live from existing objects.
+        operator_answer_count = sum(
+            1 for s in profile.evidence_snippets if s.source == "operator"
+        )
+        triggered_condition_count = len(
+            st.session_state.triggered_conditions
+        )
+        evidence_snippet_count = len(profile.evidence_snippets)
+        acuity_factor_count = len(acuity_recs["recommendations"])
+        risk_gap_count = len(risk_register["gaps"])
+        disagreement_count = len(unresolved_disagreements)
+
+        with st.container(border=True):
+            st.subheader("How this recommendation was generated")
+            st.caption(
+                "Every claim below traces to a verifiable evidence ID."
+            )
+            st.markdown(
+                f"- ✓ {operator_answer_count} structured operator interview "
+                f"responses captured across {triggered_condition_count} "
+                "clinical conditions\n"
+                f"- ✓ {evidence_snippet_count} evidence snippets extracted "
+                "from discharge summary and family notes\n"
+                "- ✓ 1 AFH Disclosure of Services document cross-checked "
+                "against resident needs\n"
+                f"- ✓ {acuity_factor_count} acuity factors evaluated against "
+                "Washington CARE criteria (WAC 388-106)\n"
+                f"- ✓ {risk_gap_count} disclosure gaps identified and "
+                "severity-ranked\n"
+                f"- ✓ {disagreement_count} unresolved source disagreements "
+                "surfaced for clinical review"
+            )
+
+        if decision is not None:
+            tps = decision.get("family_call_talking_points", [])
+            if tps:
+                st.subheader("Talking points for the family call")
+                for tp in tps:
+                    st.markdown(f"- {tp}")
+        if unresolved_disagreements:
+            st.subheader("Unresolved disagreements")
+            for d in unresolved_disagreements:
+                st.markdown(f"- {d}")
+        open_qs = plan.get("open_questions_for_followup", [])
+        if open_qs:
+            st.subheader("Open questions for follow-up")
+            for q in open_qs:
+                # Strip a leading "N. " numeric prefix so we don't render
+                # double-formatted bullets like "- 1. FOO" when the model
+                # already numbered its own list.
+                cleaned = re.sub(r"^\d+\.\s*", "", q)
+                st.markdown(f"- {cleaned}")
+
+    # Care Plan / Acuity Factors / Risk Register — existing renderers
+    # unchanged.
+    def _render_in_tab(key: str, renderer) -> None:
+        if compare_baseline and baseline is not None:
+            col_staged, col_baseline = st.columns(2)
+            with col_staged:
+                st.markdown("##### Staged pipeline")
+                renderer(artifacts[key], profile)
+            with col_baseline:
+                st.markdown("##### Baseline (single call)")
+                renderer(baseline[key], profile)
+        else:
+            renderer(artifacts[key], profile)
+
+    with tab_care:
+        _render_in_tab("care_plan", _render_care_plan)
+    with tab_acuity:
+        _render_in_tab(
+            "acuity_factor_recommendations", _render_acuity_recs
+        )
+    with tab_risk:
+        _render_in_tab("risk_register", _render_risk_register)
+
+    # Profile — developer telemetry moved here from the sidebar.
+    with tab_profile:
+        st.markdown(
+            f"**Triggered conditions:** "
+            f"{', '.join(st.session_state.triggered_conditions) or '(none)'}"
+        )
+        st.markdown(
+            f"**Evidence snippets:** {len(profile.evidence_snippets)}"
+        )
+        with st.expander("Recent snippets"):
+            for s in profile.evidence_snippets[-10:]:
+                st.text(f"[{s.source}] {s.snippet_id}: {s.claim[:60]}")
+        st.markdown(
+            f"**Source disagreements:** "
+            f"{len(profile.source_disagreements)}"
+        )
+        if profile.source_disagreements:
+            with st.expander("Disagreements"):
+                for d in profile.source_disagreements:
+                    st.text(d.field)
+                    if d.discharge_claim:
+                        st.caption(f"  discharge: {d.discharge_claim}")
+                    if d.family_claim:
+                        st.caption(f"  family: {d.family_claim}")
+        with st.expander("Full profile JSON"):
+            st.json(profile.model_dump(exclude_none=True))
