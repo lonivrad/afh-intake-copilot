@@ -723,97 +723,246 @@ def _preview_text(text: str, n: int = 70) -> str:
     return cleaned if len(cleaned) <= n else cleaned[:n] + "..."
 
 
+_SOURCE_LABELS = {
+    "discharge": "Discharge evidence",
+    "family": "Family note",
+    "operator": "Operator answer",
+}
+
+
+def _evidence_label(
+    snippet, n_refs: int, is_high_gap: bool
+) -> str:
+    """Build the compact-row label for one evidence snippet."""
+    src_label = _SOURCE_LABELS.get(snippet.source, snippet.source)
+    preview = _preview_text(snippet.verbatim_text)
+    if snippet.source == "operator":
+        middle = f"{src_label} → {preview}"
+    else:
+        middle = f"{src_label} · {preview}"
+    ref_suffix = f"{n_refs} ref{'' if n_refs == 1 else 's'}"
+    label = f"{snippet.snippet_id} · {middle} · {ref_suffix}"
+    if is_high_gap:
+        label += " · HIGH-GAP EVIDENCE"
+    return label
+
+
+def _render_snippet_row(snippet, refs: list[str], is_high_gap: bool) -> None:
+    label = _evidence_label(snippet, len(refs), is_high_gap)
+    with st.expander(label, expanded=False):
+        if is_high_gap:
+            st.warning(
+                "This snippet supports a high-severity capability gap."
+            )
+        if snippet.claim:
+            st.markdown(f"**Claim / context:** {snippet.claim}")
+        st.markdown(f"**Full text:** {snippet.verbatim_text}")
+        if refs:
+            st.markdown("**Referenced in:**")
+            for ref in refs:
+                st.markdown(f"- {ref}")
+        else:
+            st.markdown(
+                "_Not referenced by any committed artifact._"
+            )
+
+
 def _render_evidence_provenance_map(
     combined_artifacts: dict, profile: ResidentProfile
 ) -> None:
-    """Live Evidence Provenance Viewer (Step 10.21 + compact refactor).
+    """Audit-navigation view of the evidence base.
 
-    Outer expander → coverage counts → referenced snippets grouped by
-    source (each snippet its own collapsed expander) → compact
-    unreferenced section (also one expander per snippet). No full
-    verbatim text is rendered outside an individual snippet expander.
+    Summary line + legend → filter row (source / reference type / high-
+    gap toggle) → coverage line → filtered snippets grouped by source
+    (compact collapsed rows) → unreferenced section with explanation.
+    Reference-finding logic unchanged.
     """
     with st.expander("🔍 View Evidence Provenance Map", expanded=False):
         render_info_card(
             "Evidence Map",
             "Every claim in the artifacts traces back to a verbatim "
-            "source quote. Expand any snippet below for its full text "
-            "and the artifacts that cite it.",
+            "source quote. Use the filters below to narrow the view; "
+            "expand any snippet for full text and the artifacts that "
+            "cite it.",
             accent="#0f766e",
         )
         snippets = profile.evidence_snippets
 
-        # Evidence statistics (counts by source) — always visible.
-        discharge_count = sum(1 for s in snippets if s.source == "discharge")
-        family_count = sum(1 for s in snippets if s.source == "family")
-        operator_count = sum(1 for s in snippets if s.source == "operator")
-        total = len(snippets)
+        # Reference index per snippet (computed once).
+        snippet_refs: dict[str, list[str]] = {
+            s.snippet_id: find_snippet_references(
+                s.snippet_id, combined_artifacts
+            )
+            for s in snippets
+        }
 
-        st.subheader("Evidence Coverage")
-        st.markdown(
-            f"- Discharge summary: {discharge_count} snippets\n"
-            f"- Family notes: {family_count} snippets\n"
-            f"- Operator interview: {operator_count} snippets\n"
-            f"- **Total evidence base: {total} snippets**"
+        # Snippet IDs cited by any high-severity risk gap.
+        high_gap_snippet_ids: set[str] = set()
+        risk = combined_artifacts.get("risk_register", {}) or {}
+        for gap in risk.get("gaps", []) or []:
+            if gap.get("severity") == "high":
+                for sid in gap.get("evidence_snippet_ids", []) or []:
+                    high_gap_snippet_ids.add(sid)
+
+        total = len(snippets)
+        unreferenced_count = sum(
+            1 for s in snippets if not snippet_refs[s.snippet_id]
         )
 
-        # Pre-compute references once per snippet so we can group cleanly.
-        snippet_refs: dict[str, list[str]] = {}
-        unreferenced_list = []
-        for s in snippets:
-            refs = find_snippet_references(s.snippet_id, combined_artifacts)
-            snippet_refs[s.snippet_id] = refs
-            if not refs:
-                unreferenced_list.append(s)
+        # Summary line + legend.
+        st.markdown(
+            f"**{total} evidence snippets · {unreferenced_count} "
+            "unreferenced · grouped by source and artifact references**"
+        )
+        st.caption(
+            "S = discharge/source document · F = family note · "
+            "OP = operator interview answer · gap_XX = risk register item"
+        )
 
-        # Referenced snippets grouped by source. Each snippet renders as
-        # its own collapsed expander — full text only on expand.
+        st.divider()
+
+        # Filter controls.
+        col_src, col_ref, col_hi = st.columns([1, 1, 1])
+        with col_src:
+            source_filter = st.selectbox(
+                "Source",
+                ["All", "Discharge", "Family", "Operator"],
+                key="ev_filter_source",
+            )
+        with col_ref:
+            ref_filter = st.selectbox(
+                "References",
+                [
+                    "All references",
+                    "Risk gaps only",
+                    "Care plan only",
+                    "Acuity factors only",
+                    "Intake decision only",
+                    "Unreferenced only",
+                ],
+                key="ev_filter_ref",
+            )
+        with col_hi:
+            high_gap_only = st.checkbox(
+                "Show only evidence tied to high-severity gaps",
+                key="ev_filter_highgap",
+            )
+
+        # Live coverage line (totals never change with filter).
+        discharge_count = sum(
+            1 for s in snippets if s.source == "discharge"
+        )
+        family_count = sum(1 for s in snippets if s.source == "family")
+        operator_count = sum(
+            1 for s in snippets if s.source == "operator"
+        )
+        st.caption(
+            f"Coverage: Discharge {discharge_count} · Family "
+            f"{family_count} · Operator {operator_count} · Total {total}"
+        )
+
+        # Filter application.
+        def _matches(s, refs: list[str]) -> bool:
+            if (
+                source_filter != "All"
+                and s.source != source_filter.lower()
+            ):
+                return False
+            if ref_filter == "Risk gaps only" and not any(
+                r.startswith("Risk Register") for r in refs
+            ):
+                return False
+            if ref_filter == "Care plan only" and not any(
+                r.startswith("Care Plan") for r in refs
+            ):
+                return False
+            if ref_filter == "Acuity factors only" and not any(
+                r.startswith("Acuity Factors") for r in refs
+            ):
+                return False
+            if ref_filter == "Intake decision only" and not any(
+                r.startswith("Intake Decision") for r in refs
+            ):
+                return False
+            if ref_filter == "Unreferenced only" and refs:
+                return False
+            if (
+                high_gap_only
+                and s.snippet_id not in high_gap_snippet_ids
+            ):
+                return False
+            return True
+
+        passing = [s for s in snippets if _matches(s, snippet_refs[s.snippet_id])]
+
+        # "Unreferenced only" → single flat list, no source grouping
+        # and no separate unreferenced section.
+        if ref_filter == "Unreferenced only":
+            if not passing:
+                st.info("No snippets match the current filter.")
+            else:
+                st.subheader(
+                    f"⚠ Unreferenced Evidence ({len(passing)})"
+                )
+                st.markdown(
+                    "These snippets were extracted but not cited in "
+                    "final artifacts. This is often normal for "
+                    "demographic or background details, but should be "
+                    "reviewed if the snippet contains clinical or "
+                    "operational risk."
+                )
+                for s in passing:
+                    _render_snippet_row(
+                        s, [], s.snippet_id in high_gap_snippet_ids
+                    )
+            return
+
+        # Referenced snippets grouped by source.
         source_meta = [
             ("discharge", "Discharge summary evidence"),
             ("family", "Family notes evidence"),
             ("operator", "Operator interview evidence"),
         ]
-        for source_key, source_heading in source_meta:
-            in_source = [
+        rendered_any = False
+        for source_key, heading in source_meta:
+            group = [
                 s
-                for s in snippets
-                if s.source == source_key
-                and snippet_refs[s.snippet_id]
+                for s in passing
+                if s.source == source_key and snippet_refs[s.snippet_id]
             ]
-            if not in_source:
+            if not group:
                 continue
-            st.subheader(source_heading)
-            for s in in_source:
-                label = (
-                    f"{s.snippet_id} · {s.source} · "
-                    f"{_preview_text(s.verbatim_text)}"
+            rendered_any = True
+            st.subheader(heading)
+            for s in group:
+                _render_snippet_row(
+                    s,
+                    snippet_refs[s.snippet_id],
+                    s.snippet_id in high_gap_snippet_ids,
                 )
-                with st.expander(label, expanded=False):
-                    st.markdown(f"**Full text:** {s.verbatim_text}")
-                    st.markdown("**Referenced in:**")
-                    for ref in snippet_refs[s.snippet_id]:
-                        st.markdown(f"- {ref}")
 
-        # Unreferenced evidence — compact: id + source + preview only.
-        if unreferenced_list:
+        # Unreferenced section — only when "All references" is selected
+        # (other reference filters by definition exclude unreferenced).
+        unreferenced_passing = [
+            s for s in passing if not snippet_refs[s.snippet_id]
+        ]
+        if unreferenced_passing and ref_filter == "All references":
             st.subheader(
-                f"⚠ Unreferenced Evidence ({len(unreferenced_list)})"
+                f"⚠ Unreferenced Evidence ({len(unreferenced_passing)})"
             )
             st.markdown(
                 "These snippets were extracted but not cited in final "
-                "artifacts. Expand a row for full text."
+                "artifacts. This is often normal for demographic or "
+                "background details, but should be reviewed if the "
+                "snippet contains clinical or operational risk."
             )
-            for s in unreferenced_list:
-                label = (
-                    f"{s.snippet_id} · {s.source} · "
-                    f"{_preview_text(s.verbatim_text)}"
+            for s in unreferenced_passing:
+                _render_snippet_row(
+                    s, [], s.snippet_id in high_gap_snippet_ids
                 )
-                with st.expander(label, expanded=False):
-                    st.markdown(f"**Full text:** {s.verbatim_text}")
-                    st.markdown(f"**Claim:** {s.claim}")
-                    st.markdown(
-                        "_(not referenced by any committed artifact)_"
-                    )
+
+        if not rendered_any and not unreferenced_passing:
+            st.info("No snippets match the current filter.")
 
 
 def _render_intake_decision(
