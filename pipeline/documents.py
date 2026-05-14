@@ -238,3 +238,113 @@ def generate_admission_action_plan(
     )
 
     return "\n".join(parts)
+
+
+def generate_admission_action_plan_pdf(markdown_text: str) -> bytes:
+    """Render the Draft Admission Action Plan markdown to a PDF.
+
+    Lightweight reportlab-based converter: walks the markdown line by
+    line and emits Title / Heading / Bullet / Quote / Body paragraphs
+    with reportlab's built-in styles. Inline markdown for **bold** and
+    *italic* maps to reportlab's <b>/<i> tags. The PDF content is
+    derived from the same markdown the operator can download, so the
+    two artifacts stay in sync.
+
+    Returns the binary PDF as bytes.
+    """
+    from io import BytesIO
+    from html import escape
+
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import inch
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+
+    buf = BytesIO()
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=letter,
+        leftMargin=0.75 * inch,
+        rightMargin=0.75 * inch,
+        topMargin=0.75 * inch,
+        bottomMargin=0.75 * inch,
+        title="Draft Admission Action Plan",
+        author="AFH Acuity Intake Copilot",
+    )
+
+    base = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        "title", parent=base["Title"], fontSize=20, spaceAfter=18
+    )
+    h2_style = ParagraphStyle(
+        "h2",
+        parent=base["Heading2"],
+        fontSize=14,
+        spaceAfter=8,
+        spaceBefore=14,
+        textColor="#1e3a5f",
+    )
+    h3_style = ParagraphStyle(
+        "h3",
+        parent=base["Heading3"],
+        fontSize=12,
+        spaceAfter=6,
+        spaceBefore=10,
+        textColor="#374151",
+    )
+    body_style = ParagraphStyle(
+        "body", parent=base["BodyText"], fontSize=10, leading=14
+    )
+    bullet_style = ParagraphStyle(
+        "bullet",
+        parent=body_style,
+        leftIndent=18,
+        bulletIndent=8,
+        spaceAfter=2,
+    )
+    quote_style = ParagraphStyle(
+        "quote",
+        parent=body_style,
+        leftIndent=18,
+        textColor="#4b5563",
+        fontName="Times-Italic",
+    )
+
+    def _inline(text: str) -> str:
+        text = escape(text)
+        text = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", text)
+        text = re.sub(r"(?<!\*)\*([^*]+?)\*(?!\*)", r"<i>\1</i>", text)
+        return text
+
+    story: list = []
+    for raw in markdown_text.split("\n"):
+        line = raw.rstrip()
+        stripped = line.strip()
+        if not stripped:
+            story.append(Spacer(1, 6))
+            continue
+        if stripped == "---":
+            story.append(Spacer(1, 6))
+            continue
+        if line.startswith("# "):
+            story.append(Paragraph(_inline(line[2:].strip()), title_style))
+        elif line.startswith("## "):
+            story.append(Paragraph(_inline(line[3:].strip()), h2_style))
+        elif line.startswith("### "):
+            story.append(Paragraph(_inline(line[4:].strip()), h3_style))
+        elif line.startswith("- "):
+            story.append(
+                Paragraph(
+                    _inline(line[2:].strip()),
+                    bullet_style,
+                    bulletText="•",
+                )
+            )
+        elif line.startswith("> "):
+            story.append(Paragraph(_inline(line[2:].strip()), quote_style))
+        else:
+            story.append(Paragraph(_inline(line), body_style))
+
+    doc.build(story)
+    return buf.getvalue()
+

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from html import escape as html_escape
 from pathlib import Path
 
@@ -19,7 +19,10 @@ import streamlit as st
 from pypdf import PdfReader
 
 from pipeline.baseline import run_baseline
-from pipeline.documents import generate_admission_action_plan
+from pipeline.documents import (
+    generate_admission_action_plan,
+    generate_admission_action_plan_pdf,
+)
 from pipeline.extraction import ResidentProfile, run_initial_extraction
 from pipeline.interview import InterviewSession
 from pipeline.synthesis import (
@@ -36,9 +39,14 @@ st.set_page_config(page_title="AFH Acuity Intake Copilot", layout="wide")
 st.markdown(
     """
     <style>
-    p, li, div {
-        word-wrap: break-word !important;
-        overflow-wrap: break-word !important;
+    * {
+        box-sizing: border-box;
+        overflow-wrap: anywhere !important;
+        word-break: normal !important;
+    }
+    div[data-testid="stMarkdownContainer"] {
+        overflow-wrap: anywhere !important;
+        white-space: normal !important;
     }
     section.main * {
         line-height: 1.55 !important;
@@ -75,7 +83,45 @@ DEFAULT_STATE = {
     "intake_decision": None,
     "baseline_output": None,
     "draft_action_plan": None,
+    "custom_tasks": [],
+    "target_move_in_date": None,
 }
+
+
+_TASK_STATUS_OPTIONS = {
+    "question": ["Unanswered", "Answered", "Waiting"],
+    "condition": [
+        "Pending",
+        "Waiting on external party",
+        "Confirmed",
+    ],
+    "action": ["Not started", "Waiting", "Done"],
+}
+
+_TASK_DONE_STATES = {
+    "question": "Answered",
+    "condition": "Confirmed",
+    "action": "Done",
+}
+
+_OWNER_DUE_OFFSETS_DAYS = {
+    "Physician": 5,
+    "Delegating RN": 5,
+    "Home Health / Hospital": 3,
+    "Family": 3,
+    "AFH Operator": 1,
+    "Needs Assignment": 3,
+}
+
+
+_WORKSPACE_OWNER_ORDER = [
+    "Physician",
+    "Delegating RN",
+    "AFH Operator",
+    "Family",
+    "Home Health / Hospital",
+    "Needs Assignment",
+]
 
 
 # ===== Interview UX constants =====
@@ -162,6 +208,312 @@ def _care_plan_summary(care_plan: dict) -> str:
         f"{', '.join(present)} — all grounded in "
         "discharge/family/operator evidence."
     )
+
+
+# ===== Care Plan tab — clinical artifact view =====
+
+
+_CARE_PLAN_CATEGORIES = [
+    ("Diabetes", "diabetes_care"),
+    ("Dementia", "dementia_care"),
+    ("Fall risk", "fall_risk_care"),
+    ("ADLs", "adl_support"),
+    ("Medications", "medication_management"),
+]
+
+
+def _adl_field_label(field: str) -> str:
+    return field.replace("_", " ")
+
+
+def _summarize_adl(adl_status) -> str:
+    """Compact ADL summary from existing fields (no inference)."""
+    if adl_status is None:
+        return "Not documented"
+    fields = [
+        "bed_mobility", "transfers", "eating", "toilet_use",
+        "locomotion", "dressing", "personal_hygiene", "bathing",
+    ]
+    independent: list[str] = []
+    assisted: list[str] = []
+    for f in fields:
+        val = getattr(adl_status, f, None)
+        if val == "independent":
+            independent.append(_adl_field_label(f))
+        elif val in (
+            "supervision",
+            "limited_assistance",
+            "extensive_assistance",
+            "total_dependence",
+        ):
+            assisted.append(_adl_field_label(f))
+    parts: list[str] = []
+    if independent:
+        head = ", ".join(independent[:3])
+        if len(independent) > 3:
+            head += f" (+{len(independent) - 3} more)"
+        parts.append(f"Independent in {head}")
+    if assisted:
+        head = ", ".join(assisted[:3])
+        if len(assisted) > 3:
+            head += f" (+{len(assisted) - 3} more)"
+        parts.append(f"Assistance for {head}")
+    if not parts:
+        return "Not documented"
+    return "; ".join(parts)
+
+
+def _diagnosis_summary(profile: ResidentProfile) -> str:
+    parts: list[str] = []
+    cp = profile.conditions_present
+    if cp.diabetes and profile.diabetes:
+        t = (profile.diabetes.type or "").replace("_", " ")
+        label = f"Diabetes {t}".strip()
+        if profile.diabetes.insulin and profile.diabetes.insulin.uses:
+            label += " (insulin-dependent)"
+        parts.append(label or "Diabetes")
+    elif cp.diabetes:
+        parts.append("Diabetes")
+    if cp.dementia and profile.dementia:
+        dx = (profile.dementia.diagnosis_type or "").replace("_", " ")
+        stage = profile.dementia.stage or ""
+        label = (dx.capitalize() + " dementia").strip() if dx else "Dementia"
+        if stage:
+            label += f" ({stage} stage)"
+        parts.append(label)
+    elif cp.dementia:
+        parts.append("Dementia")
+    if cp.fall_risk:
+        parts.append("Fall risk")
+    return "; ".join(parts) if parts else "Not documented"
+
+
+def _key_risks_summary(profile: ResidentProfile) -> list[str]:
+    risks: list[str] = []
+    cp = profile.conditions_present
+    if cp.fall_risk and profile.fall_risk:
+        h = profile.fall_risk.history_6mo
+        if h and h.any_falls:
+            risks.append("recent fall history")
+        else:
+            risks.append("fall risk")
+    elif cp.fall_risk:
+        risks.append("fall risk")
+    if cp.diabetes and profile.diabetes:
+        hypo = profile.diabetes.hypoglycemia
+        if hypo and hypo.history_6mo:
+            risks.append("hypoglycemia history")
+        ins = profile.diabetes.insulin
+        if ins and ins.uses:
+            risks.append("insulin-dependent")
+    if cp.dementia and profile.dementia and profile.dementia.behaviors:
+        b = profile.dementia.behaviors
+        if b.exit_seeking:
+            risks.append("exit-seeking")
+        if b.agitation:
+            risks.append("agitation")
+        if b.sundowning:
+            risks.append("sundowning")
+    return risks
+
+
+def _medications_summary(profile: ResidentProfile) -> str:
+    meds = profile.medications or []
+    if not meds:
+        return "Not documented"
+    if len(meds) <= 3:
+        return "; ".join(meds)
+    return "; ".join(meds[:3]) + f" (+{len(meds) - 3} more)"
+
+
+def _family_contact_summary(profile: ResidentProfile) -> str:
+    if profile.dementia and profile.dementia.family:
+        contact = profile.dementia.family.primary_contact
+        if contact:
+            return contact
+    return "Not documented"
+
+
+def _patient_snapshot_dict(profile: ResidentProfile) -> dict[str, str]:
+    """Build the snapshot fields once so the on-screen card and the
+    markdown export can share the same data."""
+    demo = profile.demographics
+    name = demo.resident_name_placeholder or "Resident (name not documented)"
+    age = demo.age_range or ""
+    resident = f"{name}" + (f" · {age}" if age else "")
+    risks = _key_risks_summary(profile)
+    return {
+        "Resident": resident,
+        "Diagnosis": _diagnosis_summary(profile),
+        "Medication / regimen": _medications_summary(profile),
+        "Key risks": ", ".join(risks) if risks else "Not documented",
+        "ADL status": _summarize_adl(profile.adl_status),
+        "Family / proxy": _family_contact_summary(profile),
+    }
+
+
+def _render_patient_snapshot(profile: ResidentProfile) -> None:
+    snap = _patient_snapshot_dict(profile)
+    with st.container(border=True):
+        st.markdown("**Patient Snapshot**")
+        for k, v in snap.items():
+            st.markdown(f"- **{k}:** {v}")
+
+
+def _high_gap_snippet_ids(risk_register: dict) -> set[str]:
+    """Collect evidence_snippet_ids cited by any high-severity gap.
+    A care item that cites the same snippet IDs has a real linkage to
+    a high-severity gap through the evidence layer."""
+    ids: set[str] = set()
+    for g in risk_register.get("gaps", []) or []:
+        if g.get("severity") != "high":
+            continue
+        for sid in g.get("evidence_snippet_ids", []) or []:
+            ids.add(sid)
+    return ids
+
+
+def _is_blocker_linked(item: dict, high_snippet_ids: set[str]) -> bool:
+    """A care item is blocker-linked when it cites at least one
+    evidence snippet that is also cited by a high-severity risk gap.
+    Linkage is via shared evidence IDs, not text overlap."""
+    if not high_snippet_ids:
+        return False
+    item_ids = set(item.get("evidence_snippet_ids", []) or [])
+    return bool(item_ids & high_snippet_ids)
+
+
+def _render_care_plan_metadata(
+    profile: ResidentProfile,
+    care_plan: dict,
+    risk_register: dict,
+) -> None:
+    n_snippets = len(profile.evidence_snippets)
+    total_items = sum(
+        len(care_plan.get(k, []) or []) for _, k in _CARE_PLAN_CATEGORIES
+    )
+    high_ids = _high_gap_snippet_ids(risk_register)
+    blocker_linked = sum(
+        1
+        for _, k in _CARE_PLAN_CATEGORIES
+        for it in (care_plan.get(k, []) or [])
+        if _is_blocker_linked(it, high_ids)
+    )
+    today = datetime.now().strftime("%B %d, %Y")
+    st.caption(
+        f"Generated {today} · Based on {n_snippets} evidence "
+        f"snippets · {total_items} care items · "
+        f"{blocker_linked} blocker-linked items"
+    )
+
+
+def _humanize_evidence_line(snippet) -> tuple[str, str | None]:
+    """Return (main_line_md, optional_context_caption_or_None) for
+    one evidence snippet."""
+    vt = snippet.verbatim_text or ""
+    claim = snippet.claim or ""
+    if snippet.source == "operator":
+        # Skip the internal "operator answer at NODE -> 'value'" claim;
+        # it isn't human-readable. Otherwise pass claim through as
+        # context.
+        is_raw_claim = bool(
+            re.match(r"^operator answer at\b", claim.lower())
+        )
+        context = None if is_raw_claim or claim == vt else claim or None
+        return f"- **Operator answered:** {vt}", context
+    if snippet.source == "discharge":
+        return f"- **Discharge:** {vt}", None
+    if snippet.source == "family":
+        return f"- **Family:** {vt}", None
+    return f"- `{snippet.snippet_id}` · {vt}", None
+
+
+def _render_humanized_evidence(
+    profile: ResidentProfile, snippet_ids: list[str]
+) -> None:
+    if not snippet_ids:
+        return
+    by_id = {s.snippet_id: s for s in profile.evidence_snippets}
+    with st.expander(f"Evidence ({len(snippet_ids)})", expanded=False):
+        for sid in snippet_ids:
+            snip = by_id.get(sid)
+            if snip is None:
+                st.markdown(f"- `{sid}` — _(not in current profile)_")
+                continue
+            line, context = _humanize_evidence_line(snip)
+            st.markdown(line)
+            if context:
+                st.caption(f"Context: {context}")
+
+
+def _care_item_title(recommendation: str) -> str:
+    """First sentence (or first 120 chars, whichever is shorter) for
+    the collapsed care-item expander label."""
+    rec = (recommendation or "").strip()
+    if not rec:
+        return "Care item"
+    first = re.split(r"(?<=[.!?])\s+", rec)[0]
+    if len(first) <= 120:
+        return first
+    return rec[:120].rstrip() + "…"
+
+
+def _render_care_plan_item(
+    item: dict, profile: ResidentProfile, high_snippet_ids: set[str]
+) -> None:
+    rec = (item.get("recommendation") or "").strip()
+    title = _care_item_title(rec)
+    with st.expander(title, expanded=False):
+        if _is_blocker_linked(item, high_snippet_ids):
+            st.warning(
+                "Blocker-linked: shares evidence with a "
+                "high-severity gap"
+            )
+        # Only show the full recommendation when it adds content beyond
+        # what the collapsed title already showed.
+        if rec and rec != title and len(rec) > len(title):
+            st.markdown(f"**Recommendation:** {rec}")
+        if item.get("rationale"):
+            st.markdown(f"**Rationale:** {item['rationale']}")
+        _render_humanized_evidence(
+            profile, item.get("evidence_snippet_ids", []) or []
+        )
+
+
+def _build_care_plan_export_md(
+    profile: ResidentProfile, care_plan: dict
+) -> str:
+    today = datetime.now().strftime("%B %d, %Y")
+    lines = ["# Care Plan", "", f"_Generated {today}_", ""]
+    snap = _patient_snapshot_dict(profile)
+    lines.append("## Patient Snapshot")
+    lines.append("")
+    for k, v in snap.items():
+        lines.append(f"- **{k}:** {v}")
+    lines.append("")
+    if care_plan.get("summary"):
+        lines.append("## Summary")
+        lines.append("")
+        lines.append(care_plan["summary"])
+        lines.append("")
+    for category_label, key in _CARE_PLAN_CATEGORIES:
+        items = care_plan.get(key, []) or []
+        if not items:
+            continue
+        lines.append(f"## {category_label}")
+        lines.append("")
+        for it in items:
+            rec = (it.get("recommendation") or "").strip()
+            if not rec:
+                continue
+            lines.append(f"- **{rec}**")
+            if it.get("rationale"):
+                lines.append(f"  - Rationale: {it['rationale']}")
+            ev = it.get("evidence_snippet_ids", []) or []
+            if ev:
+                lines.append(f"  - Evidence: {', '.join(ev)}")
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
 
 
 def _short_factor_label(name: str) -> str:
@@ -404,6 +756,532 @@ def _render_open_questions_grouped(open_questions: list[str]) -> None:
             st.markdown(f"- {q}")
 
 
+# ===== Action Plan worklist helpers =====
+
+
+def _infer_worklist_owner(text: str) -> str:
+    """UI-only worklist-owner inference. Keyword fan-out matches the
+    Step 10.34 spec; labeled 'UI-inferred' wherever it appears in the
+    UI."""
+    lower = (text or "").lower()
+    if any(
+        k in lower
+        for k in (
+            "physician", "endocrinologist", "dr.", "dr ",
+            "prescriber", "doctor", "primary care",
+        )
+    ):
+        return "Physician"
+    if any(
+        k in lower
+        for k in (
+            "delegating rn", "rn ", "registered nurse",
+            "nurse delegation", "delegation",
+            "delegating nurse", "nurse",
+        )
+    ):
+        return "Delegating RN"
+    if any(
+        k in lower
+        for k in (
+            "daughter", "son", "spouse", "family",
+            "representative", "responsible party",
+            "primary contact",
+        )
+    ):
+        return "Family"
+    if any(
+        k in lower
+        for k in (
+            "home health", "pt ", "physical therapy",
+            "hospital", "discharging", "discharge team",
+            "discharge plan", "skilled nursing", "snf",
+        )
+    ):
+        return "Home Health / Hospital"
+    if any(
+        k in lower
+        for k in (
+            "disclosure", "afh", "operator", "staff",
+            "caregiver", "intake",
+        )
+    ):
+        return "AFH Operator"
+    return "Needs Assignment"
+
+
+# ===== Admission Command Center helpers =====
+
+
+_PRIORITY_COLORS = {
+    # Red is reserved for the single global blocking state
+    # (decision card + Admission Blocked banner). Task priority pills
+    # use amber so red retains its meaning.
+    "High": "#b45309",          # amber
+    "Medium": "#d97706",        # lighter amber
+    "Follow-up": "#6b7280",     # gray
+}
+
+
+def _priority_badge(priority: str) -> str:
+    bg = _PRIORITY_COLORS.get(priority, "#6b7280")
+    return (
+        f'<span style="background:{bg}; color:white; padding:3px 9px; '
+        f'border-radius:6px; font-size:12px; font-weight:700; '
+        f'text-transform:uppercase; letter-spacing:.04em; '
+        f'margin-right:6px;">{html_escape(priority)}</span>'
+    )
+
+
+def _owner_chip(owner: str) -> str:
+    return (
+        f'<span style="background:#f3f4f6; color:#374151; '
+        f'padding:3px 9px; border-radius:6px; font-size:12px; '
+        f'font-weight:600; margin-right:6px;">'
+        f"{html_escape(owner)}</span>"
+    )
+
+
+_ORIGIN_LABELS = {
+    "Condition": "Condition",
+    "Risk gap": "Risk Gap",
+    "Open question": "Question",
+    "Custom": "Custom",
+}
+
+
+def _origin_chip(source: str) -> str:
+    label = _ORIGIN_LABELS.get(source, source)
+    return (
+        '<span style="background:#eef2ff; color:#3730a3; '
+        'padding:3px 9px; border-radius:6px; font-size:12px; '
+        f'font-weight:600;">{html_escape(label)}</span>'
+    )
+
+
+def _build_workstreams(
+    decision: dict,
+    care_plan: dict,
+    risk_register: dict,
+    custom_tasks: list[dict],
+) -> tuple[dict[str, list[dict]], dict[str, list[dict]]]:
+    """Return (open_questions_by_owner, action_tasks_by_owner).
+    Tasks carry a UI-only `type` field used to dispatch the per-type
+    renderer: open questions → 'question', conditions → 'condition',
+    risk gaps → 'action'. Custom tasks default to 'action' but the
+    user can override via the Add Custom Task form."""
+    open_qs: dict[str, list[dict]] = {}
+    actions: dict[str, list[dict]] = {}
+
+    for i, cond in enumerate(
+        decision.get("conditions_before_admission", []) or []
+    ):
+        cond = (cond or "").strip()
+        if not cond:
+            continue
+        owner = _infer_worklist_owner(cond)
+        actions.setdefault(owner, []).append(
+            {
+                "id": f"cond_{i}",
+                "action": cond,
+                "priority": "High",
+                "owner": owner,
+                "source": "Condition",
+                "type": "condition",
+            }
+        )
+
+    for i, gap in enumerate(risk_register.get("gaps", []) or []):
+        sev = gap.get("severity")
+        if sev not in ("high", "medium"):
+            continue
+        text = (
+            gap.get("suggested_next_action")
+            or gap.get("resident_need")
+            or ""
+        ).strip()
+        if not text:
+            continue
+        owner = _infer_worklist_owner(text)
+        actions.setdefault(owner, []).append(
+            {
+                "id": f"riskgap_{i}",
+                "action": text,
+                "priority": "High" if sev == "high" else "Medium",
+                "owner": owner,
+                "source": "Risk gap",
+                "type": "action",
+            }
+        )
+
+    for i, q in enumerate(
+        care_plan.get("open_questions_for_followup", []) or []
+    ):
+        cleaned = re.sub(r"^\d+\.\s*", "", q).strip()
+        if not cleaned:
+            continue
+        owner = _infer_worklist_owner(cleaned)
+        open_qs.setdefault(owner, []).append(
+            {
+                "id": f"oq_{i}",
+                "action": cleaned,
+                "priority": "Follow-up",
+                "owner": owner,
+                "source": "Open question",
+                "type": "question",
+            }
+        )
+
+    for ct in custom_tasks or []:
+        owner = ct.get("owner") or "Needs Assignment"
+        t_type = ct.get("type") or "action"
+        bucket = open_qs if t_type == "question" else actions
+        bucket.setdefault(owner, []).append({**ct, "type": t_type})
+
+    return open_qs, actions
+
+
+def _suggest_due_date(owner: str, target_date):
+    if not target_date:
+        return None
+    days = _OWNER_DUE_OFFSETS_DAYS.get(owner, 3)
+    try:
+        return target_date - timedelta(days=days)
+    except Exception:
+        return None
+
+
+def _is_task_done(task: dict) -> bool:
+    tid = task["id"]
+    t = task.get("type", "action")
+    status_key = f"task_status_{tid}"
+    default = _TASK_STATUS_OPTIONS[t][0]
+    current = st.session_state.get(status_key, default)
+    return current == _TASK_DONE_STATES[t]
+
+
+def _compute_workspace_kpis(
+    open_qs: dict[str, list[dict]],
+    actions: dict[str, list[dict]],
+) -> tuple[int, int, int, int, int]:
+    """Return (high_remaining, medium_remaining, followup_remaining,
+    completed, total). Completion is derived from per-type status
+    fields (Answered / Confirmed / Done) rather than a generic
+    checkbox."""
+    all_tasks: list[dict] = []
+    for tasks in open_qs.values():
+        all_tasks.extend(tasks)
+    for tasks in actions.values():
+        all_tasks.extend(tasks)
+    total = len(all_tasks)
+
+    high_rem = sum(
+        1
+        for t in all_tasks
+        if t["priority"] == "High" and not _is_task_done(t)
+    )
+    med_rem = sum(
+        1
+        for t in all_tasks
+        if t["priority"] == "Medium" and not _is_task_done(t)
+    )
+    fu_rem = sum(
+        1
+        for t in all_tasks
+        if t["priority"] == "Follow-up" and not _is_task_done(t)
+    )
+    completed = sum(1 for t in all_tasks if _is_task_done(t))
+    return high_rem, med_rem, fu_rem, completed, total
+
+
+def _init_status_key(task: dict) -> str:
+    tid = task["id"]
+    status_key = f"task_status_{tid}"
+    if status_key not in st.session_state:
+        st.session_state[status_key] = _TASK_STATUS_OPTIONS[task["type"]][0]
+    return status_key
+
+
+def _task_header_badges(task: dict, include_priority: bool = True) -> str:
+    """Compact badge row used inside an opened task card. Owner chip is
+    omitted (owner is already in the group header). Priority pill may
+    be suppressed when the surrounding subgroup label (Blocking /
+    Pre-admission) already conveys priority."""
+    parts: list[str] = []
+    if include_priority:
+        parts.append(_priority_badge(task["priority"]))
+    parts.append(_origin_chip(task["source"]))
+    return "".join(parts)
+
+
+def _task_label(task: dict, include_priority: bool = True) -> str:
+    if include_priority:
+        return f"[{task['priority'].upper()}] {task['action']}"
+    return task["action"]
+
+
+def _render_question_task(task: dict, include_priority: bool = True) -> None:
+    tid = task["id"]
+    status_key = _init_status_key(task)
+    answer_key = f"task_answer_{tid}"
+    with st.expander(_task_label(task, include_priority), expanded=False):
+        st.markdown(
+            _task_header_badges(task, include_priority=include_priority),
+            unsafe_allow_html=True,
+        )
+        st.selectbox(
+            "Status",
+            _TASK_STATUS_OPTIONS["question"],
+            key=status_key,
+        )
+        st.text_area(
+            "Answer / resolution",
+            value=st.session_state.get(answer_key, ""),
+            key=answer_key,
+            height=80,
+        )
+
+
+def _render_condition_task(
+    task: dict, include_priority: bool = True
+) -> None:
+    tid = task["id"]
+    status_key = _init_status_key(task)
+    confirmed_by_key = f"task_confirmed_by_{tid}"
+    confirmed_date_key = f"task_confirmed_date_{tid}"
+    note_toggle_key = f"task_show_note_{tid}"
+    notes_key = f"task_notes_{tid}"
+    with st.expander(_task_label(task, include_priority), expanded=False):
+        st.markdown(
+            _task_header_badges(task, include_priority=include_priority),
+            unsafe_allow_html=True,
+        )
+        st.selectbox(
+            "Status",
+            _TASK_STATUS_OPTIONS["condition"],
+            key=status_key,
+        )
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            st.text_input(
+                "Confirmed by",
+                value=st.session_state.get(confirmed_by_key, ""),
+                key=confirmed_by_key,
+            )
+        with col2:
+            st.date_input(
+                "Confirmed date",
+                value=st.session_state.get(confirmed_date_key),
+                key=confirmed_date_key,
+            )
+        show_note = st.checkbox("Add note", key=note_toggle_key)
+        if show_note:
+            st.text_area(
+                "Note",
+                value=st.session_state.get(notes_key, ""),
+                key=notes_key,
+                height=70,
+            )
+
+
+def _render_action_task(task: dict, include_priority: bool = True) -> None:
+    tid = task["id"]
+    status_key = _init_status_key(task)
+    due_key = f"task_due_{tid}"
+    note_toggle_key = f"task_show_note_{tid}"
+    notes_key = f"task_notes_{tid}"
+    if due_key not in st.session_state:
+        target = st.session_state.get("target_move_in_date")
+        st.session_state[due_key] = _suggest_due_date(task["owner"], target)
+    with st.expander(_task_label(task, include_priority), expanded=False):
+        st.markdown(
+            _task_header_badges(task, include_priority=include_priority),
+            unsafe_allow_html=True,
+        )
+        col_s, col_d = st.columns([2, 1])
+        with col_s:
+            st.selectbox(
+                "Status",
+                _TASK_STATUS_OPTIONS["action"],
+                key=status_key,
+            )
+        with col_d:
+            st.date_input(
+                "Suggested due date",
+                value=st.session_state.get(due_key),
+                key=due_key,
+            )
+        show_note = st.checkbox("Add note", key=note_toggle_key)
+        if show_note:
+            st.text_area(
+                "Note",
+                value=st.session_state.get(notes_key, ""),
+                key=notes_key,
+                height=70,
+            )
+
+
+def _render_task_dispatch(
+    task: dict, include_priority: bool = True
+) -> None:
+    t = task.get("type", "action")
+    if t == "question":
+        _render_question_task(task, include_priority=include_priority)
+    elif t == "condition":
+        _render_condition_task(task, include_priority=include_priority)
+    else:
+        _render_action_task(task, include_priority=include_priority)
+
+
+def _owner_header(
+    owner: str, tasks: list[dict], has_blocking: bool = False
+) -> str:
+    total = len(tasks)
+    done = sum(1 for t in tasks if _is_task_done(t))
+    open_n = total - done
+    header = f"{owner} ({total} · {done} done · {open_n} open)"
+    if has_blocking:
+        header += " · blocking items"
+    return header
+
+
+def _render_open_questions_workstream(
+    tasks_by_owner: dict[str, list[dict]],
+) -> None:
+    """Per-owner expanders for the Open Questions workstream. All
+    tasks here are follow-up; per spec, default collapsed."""
+    if not any(tasks_by_owner.values()):
+        st.caption("No open questions for this resident.")
+        return
+    for owner in _WORKSPACE_OWNER_ORDER:
+        tasks = tasks_by_owner.get(owner)
+        if not tasks:
+            continue
+        header = _owner_header(owner, tasks)
+        with st.expander(header, expanded=False):
+            for task in tasks:
+                _render_task_dispatch(task, include_priority=False)
+
+
+def _render_action_tasks_workstream(
+    tasks_by_owner: dict[str, list[dict]],
+) -> None:
+    """Per-owner expanders for the Action Tasks workstream, with
+    Blocking (High) and Pre-admission (Medium) subgroups inside each
+    owner. Groups containing Blocking items default expanded; others
+    default collapsed. Priority pill is suppressed inside subgroups
+    because the subgroup label already conveys priority."""
+    if not any(tasks_by_owner.values()):
+        st.caption("No action tasks for this resident.")
+        return
+    for owner in _WORKSPACE_OWNER_ORDER:
+        tasks = tasks_by_owner.get(owner)
+        if not tasks:
+            continue
+        blocking = [t for t in tasks if t["priority"] == "High"]
+        pre_adm = [t for t in tasks if t["priority"] == "Medium"]
+        other = [
+            t
+            for t in tasks
+            if t["priority"] not in ("High", "Medium")
+        ]
+        header = _owner_header(owner, tasks, has_blocking=bool(blocking))
+        with st.expander(header, expanded=bool(blocking)):
+            if blocking:
+                st.markdown("**Blocking**")
+                for task in blocking:
+                    _render_task_dispatch(task, include_priority=False)
+            if pre_adm:
+                if blocking:
+                    st.markdown("---")
+                st.markdown("**Pre-admission**")
+                for task in pre_adm:
+                    _render_task_dispatch(task, include_priority=False)
+            if other:
+                if blocking or pre_adm:
+                    st.markdown("---")
+                st.markdown("**Other**")
+                for task in other:
+                    _render_task_dispatch(task, include_priority=True)
+
+
+def _render_blocker_banner(high_remaining: int) -> None:
+    if high_remaining > 0:
+        st.markdown(
+            f"""
+            <div style="background:#991b1b; color:white; padding:16px 20px; border-radius:10px; margin:12px 0;">
+                <div style="font-weight:800; font-size:18px; letter-spacing:.04em;">ADMISSION BLOCKED</div>
+                <div style="font-size:14px; margin-top:6px;">{high_remaining} high-severity blocker{'' if high_remaining == 1 else 's'} remain unresolved.</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            """
+            <div style="background:#2d5f3f; color:white; padding:16px 20px; border-radius:10px; margin:12px 0;">
+                <div style="font-weight:800; font-size:18px; letter-spacing:.04em;">HIGH-RISK BLOCKERS CLEARED</div>
+                <div style="font-size:14px; margin-top:6px;">No high-severity tasks remain unresolved.</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+
+def _render_add_custom_task() -> None:
+    with st.expander("Add custom task", expanded=False):
+        text = st.text_input(
+            "Task text", key="custom_task_text_input"
+        )
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            owner = st.selectbox(
+                "Owner",
+                _WORKSPACE_OWNER_ORDER,
+                key="custom_task_owner_select",
+            )
+        with col2:
+            severity = st.selectbox(
+                "Priority",
+                ["High", "Medium", "Follow-up"],
+                key="custom_task_priority_select",
+            )
+        with col3:
+            t_type = st.selectbox(
+                "Type",
+                ["action", "question", "condition"],
+                key="custom_task_type_select",
+            )
+        if st.button("Add task", key="custom_task_add_button"):
+            cleaned = (text or "").strip()
+            if not cleaned:
+                st.warning("Task text is required.")
+            else:
+                n = len(st.session_state.custom_tasks)
+                st.session_state.custom_tasks.append(
+                    {
+                        "id": f"custom_{n}",
+                        "action": cleaned,
+                        "priority": severity,
+                        "owner": owner,
+                        "source": "Custom",
+                        "type": t_type,
+                    }
+                )
+                st.session_state.custom_task_text_input = ""
+                st.rerun()
+
+
+def _wipe_workspace_state() -> None:
+    """Clear all per-task session state (status, due, notes, answer,
+    confirmed_by, confirmed_date, show_note) plus custom tasks. The
+    target_move_in_date is preserved across regenerate."""
+    for k in list(st.session_state.keys()):
+        if k.startswith("task_"):
+            del st.session_state[k]
+    st.session_state.custom_tasks = []
+
+
 # ===== Action Plan markdown sectionizer =====
 
 
@@ -427,30 +1305,6 @@ def _parse_action_plan_sections(md: str) -> tuple[str, list[tuple[str, str]]]:
 
 
 # ===== Nested per-item renderers (inside the "View …" outer expander) =====
-
-
-_CARE_SECTIONS = [
-    ("Diabetes", "diabetes_care"),
-    ("Dementia", "dementia_care"),
-    ("Fall risk", "fall_risk_care"),
-    ("ADLs", "adl_support"),
-    ("Medications", "medication_management"),
-]
-
-
-def _render_care_item_nested(
-    section_label: str, item: dict, profile: ResidentProfile
-) -> None:
-    rec = (item.get("recommendation") or "").strip()
-    preview = rec if len(rec) <= 100 else rec[:100].rstrip() + "…"
-    label = f"{section_label} · {preview}"
-    with st.expander(label, expanded=False):
-        st.markdown(rec)
-        if item.get("rationale"):
-            st.caption(f"Rationale: {item['rationale']}")
-        _render_evidence_snippets(
-            profile, item.get("evidence_snippet_ids", []) or []
-        )
 
 
 def _render_acuity_factor_nested(
@@ -650,9 +1504,11 @@ def render_info_card(
 
 
 def severity_badge(level: str) -> str:
+    # Task/gap severity uses amber/gray; red is reserved for the single
+    # global blocking-state banner.
     colors = {
-        "high": ("#991b1b", "white"),
-        "medium": ("#b45309", "white"),
+        "high": ("#b45309", "white"),
+        "medium": ("#d97706", "white"),
         "low": ("#6b7280", "white"),
     }
     bg, fg = colors.get(str(level).lower(), ("#6b7280", "white"))
@@ -965,72 +1821,6 @@ def _render_evidence_provenance_map(
             st.info("No snippets match the current filter.")
 
 
-def _render_intake_decision(
-    decision: dict,
-    artifacts: dict | None = None,
-    profile: ResidentProfile | None = None,
-) -> None:
-    rec = decision.get("recommendation", "")
-    rationale_full = decision.get("rationale", "")
-    rationale_short = _first_two_sentences(rationale_full)
-    conditions = decision.get("conditions_before_admission", [])
-
-    render_decision_card(rec, rationale_short)
-
-    # Evidence provenance map — between the decision card and the
-    # conditions checklist. Reveals bidirectional traceability between
-    # extracted evidence and artifact claims.
-    if artifacts is not None and profile is not None:
-        combined = {**artifacts, "intake_decision": decision}
-        _render_evidence_provenance_map(combined, profile)
-
-    st.subheader("✓ Conditions before admission")
-    if rec == "accept":
-        st.write(
-            "No conditions — this resident appears to fit the home's "
-            "disclosed capabilities."
-        )
-        return
-
-    # Interactive admission checklist with a readiness meter rendered
-    # above it via st.empty() so the count updates same-run when the
-    # operator toggles a checkbox.
-    if "conditions_checked" not in st.session_state:
-        st.session_state.conditions_checked = {}
-
-    total = len(conditions)
-    meter_placeholder = st.empty()
-
-    for idx, condition in enumerate(conditions):
-        key = f"condition_{idx}"
-        # Initialize from nested dict on first encounter; subsequent runs
-        # let Streamlit's auto-key binding own the value to avoid the
-        # "value parameter ignored" warning when both `value` and `key`
-        # are passed and the key is already in session_state.
-        if key not in st.session_state:
-            st.session_state[key] = (
-                st.session_state.conditions_checked.get(key, False)
-            )
-        checked = st.checkbox(condition, key=key)
-        st.session_state.conditions_checked[key] = checked
-
-    checked_count = sum(
-        1
-        for idx in range(total)
-        if st.session_state.conditions_checked.get(
-            f"condition_{idx}", False
-        )
-    )
-
-    with meter_placeholder.container():
-        st.markdown(
-            f"**Admission readiness: {checked_count} of {total} "
-            "conditions resolved**"
-        )
-        if total > 0:
-            st.progress(checked_count / total)
-
-
 def _render_risk_register(reg: dict, profile: ResidentProfile):
     if reg.get("method_note"):
         st.caption(reg["method_note"])
@@ -1280,13 +2070,64 @@ elif stage == "synthesis_done":
     baseline = st.session_state.baseline_output
     decision = st.session_state.intake_decision
 
-    # Top-of-page: decision banner (with rationale truncated to first 2
-    # sentences) + evidence provenance map + conditions checklist.
-    # Provenance map sits between the banner and the conditions per the
-    # Step 10.21 spec; it reads the same artifacts dict used elsewhere on
-    # this page.
+    # Global header (above tabs): decision card + readiness dashboard +
+    # blocker banner + evidence provenance map. These are global
+    # admission-state elements — they belong to the whole Stage 4
+    # surface, not to any single artifact tab. The conditions checklist
+    # is intentionally dropped here: the Action Plan workstream
+    # supersedes it via condition-type tasks (status / confirmed-by /
+    # confirmed-date), which carry richer state than a flat checkbox.
     if decision is not None:
-        _render_intake_decision(decision, artifacts, profile)
+        rationale_short = _first_two_sentences(
+            decision.get("rationale", "")
+        )
+        render_decision_card(
+            decision.get("recommendation", ""),
+            rationale_short,
+        )
+
+        # Workstreams + KPIs are computed once at global scope so the
+        # readiness dashboard above the tabs and the per-owner
+        # subgroups inside Action Plan both read the same numbers.
+        global_open_qs, global_action_tasks = _build_workstreams(
+            decision,
+            artifacts["care_plan"],
+            artifacts["risk_register"],
+            st.session_state.custom_tasks,
+        )
+        (
+            global_high_rem,
+            global_med_rem,
+            global_fu_rem,
+            global_completed,
+            global_total_tasks,
+        ) = _compute_workspace_kpis(
+            global_open_qs, global_action_tasks
+        )
+
+        st.subheader("Admission Readiness")
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("High blockers", global_high_rem)
+        col2.metric("Medium", global_med_rem)
+        col3.metric("Follow-up", global_fu_rem)
+        col4.metric("Completed", global_completed)
+        if global_total_tasks > 0:
+            st.progress(global_completed / global_total_tasks)
+
+        # Single global blocker banner — only fires for unresolved
+        # High-priority tasks. Red is reserved for this state.
+        _render_blocker_banner(global_high_rem)
+
+        # Evidence provenance map — global, since it spans every
+        # artifact and every claim cited within them.
+        combined_for_map = {
+            **artifacts,
+            "intake_decision": decision,
+        }
+        _render_evidence_provenance_map(combined_for_map, profile)
+    else:
+        global_open_qs, global_action_tasks = ({}, {})
+        global_high_rem = 0
 
     st.divider()
 
@@ -1435,35 +2276,113 @@ elif stage == "synthesis_done":
                 )
                 st.rerun()
         else:
-            st.success("Draft Action Plan generated.")
-            st.download_button(
-                label="Download Draft Action Plan",
-                data=st.session_state.draft_action_plan,
-                file_name=(
-                    "admission_action_plan_"
-                    f"{datetime.now().strftime('%Y%m%d')}.md"
+            # Decision card, readiness dashboard, blocker banner and
+            # evidence map are rendered globally above the tabs —
+            # rendering them again inside this tab would just duplicate
+            # the same content. Reuse the workstreams computed above so
+            # the per-owner subgroups stay in sync with the dashboard
+            # numbers shown in the global header.
+            open_qs = global_open_qs
+            action_tasks = global_action_tasks
+
+            st.date_input(
+                "Target move-in date",
+                value=st.session_state.get("target_move_in_date"),
+                key="target_move_in_date",
+                help=(
+                    "Used to suggest default due dates for action tasks. "
+                    "Operator can override the due date on any task."
                 ),
-                mime="text/markdown",
             )
+
+            st.divider()
+            st.subheader("Open Questions to Resolve")
+            st.caption(
+                "Information still needed before admission can be "
+                "finalized. Resolve by capturing the answer in each "
+                "task."
+            )
+            _render_open_questions_workstream(open_qs)
+
+            st.divider()
+            st.subheader("Action Tasks")
+            st.caption(
+                "Concrete admission tasks grouped by owner. Blocking "
+                "items must clear before move-in; pre-admission items "
+                "should clear by the target date."
+            )
+            _render_action_tasks_workstream(action_tasks)
+            _render_add_custom_task()
+
             with st.expander(
-                "Preview Draft Action Plan", expanded=False
+                "Generated document for offline review",
+                expanded=False,
             ):
-                # Split the markdown by major numbered section so each
-                # one is its own collapsed expander instead of rendering
-                # the whole document as a single wall of markdown.
-                intro_md, sections = _parse_action_plan_sections(
-                    st.session_state.draft_action_plan
+                st.caption(
+                    "Markdown is provided for easy copy/paste into "
+                    "official AFH templates. Final admission documents "
+                    "must be completed by the operator."
                 )
-                if intro_md:
-                    st.markdown(intro_md)
-                for section_title, section_body in sections:
-                    with st.expander(section_title, expanded=False):
-                        if section_body:
-                            st.markdown(section_body)
-            if st.button("Regenerate Draft Action Plan"):
+                try:
+                    pdf_bytes = generate_admission_action_plan_pdf(
+                        st.session_state.draft_action_plan
+                    )
+                    st.download_button(
+                        label="Download PDF Worksheet",
+                        data=pdf_bytes,
+                        file_name=(
+                            "admission_action_plan_"
+                            f"{datetime.now().strftime('%Y%m%d')}.pdf"
+                        ),
+                        mime="application/pdf",
+                        type="primary",
+                    )
+                except Exception as exc:
+                    st.error(f"Could not generate PDF: {exc}")
+                with st.expander(
+                    "Advanced / Markdown export", expanded=False
+                ):
+                    st.download_button(
+                        label="Download Markdown Worksheet (.md)",
+                        data=st.session_state.draft_action_plan,
+                        file_name=(
+                            "admission_action_plan_"
+                            f"{datetime.now().strftime('%Y%m%d')}.md"
+                        ),
+                        mime="text/markdown",
+                    )
+                    intro_md, sections = _parse_action_plan_sections(
+                        st.session_state.draft_action_plan
+                    )
+                    if intro_md:
+                        st.markdown(intro_md)
+                    for section_title, section_body in sections:
+                        with st.expander(
+                            section_title, expanded=False
+                        ):
+                            if section_body:
+                                st.markdown(section_body)
+
+            st.divider()
+            st.caption(
+                "Regenerating will reset task statuses, answers, "
+                "dates, notes, and sign-off fields for this session."
+            )
+            ok_to_regen = st.checkbox(
+                "I understand this will reset the current Action Plan "
+                "workspace.",
+                key="confirm_regen_checkbox",
+            )
+            if ok_to_regen and st.button(
+                "Regenerate Draft Action Plan",
+                type="primary",
+                key="regenerate_action_plan_button",
+            ):
+                _wipe_workspace_state()
                 st.session_state.draft_action_plan = (
                     _generate_action_plan()
                 )
+                st.session_state.confirm_regen_checkbox = False
                 st.rerun()
 
     # Care Plan / Acuity Factors / Risk Register tabs — each tab shows
@@ -1482,15 +2401,56 @@ elif stage == "synthesis_done":
             _care_plan_summary(artifacts["care_plan"]),
             accent="#2563eb",
         )
-        with st.expander("View care plan", expanded=False):
-            care_plan = artifacts["care_plan"]
-            if care_plan.get("summary"):
-                st.markdown(f"**Summary:** {care_plan['summary']}")
-            for section_label, key in _CARE_SECTIONS:
-                for item in care_plan.get(key, []) or []:
-                    _render_care_item_nested(
-                        section_label, item, profile
-                    )
+        care_plan_view = artifacts["care_plan"]
+        risk_register_view = artifacts["risk_register"]
+
+        # Patient Snapshot — replaces the long paragraph summary.
+        _render_patient_snapshot(profile)
+
+        # Metadata strip with live counts and potential blocker-linked
+        # item count.
+        _render_care_plan_metadata(
+            profile, care_plan_view, risk_register_view
+        )
+
+        # Model-generated paragraph summary kept as a quiet caption so
+        # the snapshot is the primary frame at top.
+        plan_summary = care_plan_view.get("summary")
+        if plan_summary:
+            with st.expander("Synthesis-generated summary", expanded=False):
+                st.markdown(plan_summary)
+
+        st.divider()
+
+        # Category sections with per-item expanders. Blocker linkage
+        # is computed from shared evidence_snippet_ids with high-
+        # severity gaps (not keyword overlap).
+        high_ids = _high_gap_snippet_ids(risk_register_view)
+        rendered_any = False
+        for category_label, key in _CARE_PLAN_CATEGORIES:
+            items = care_plan_view.get(key, []) or []
+            if not items:
+                continue
+            rendered_any = True
+            st.subheader(f"{category_label} ({len(items)})")
+            for item in items:
+                _render_care_plan_item(item, profile, high_ids)
+        if not rendered_any:
+            st.caption("No care-plan items produced for this resident.")
+
+        st.divider()
+
+        # Care Plan markdown export (secondary).
+        export_md = _build_care_plan_export_md(profile, care_plan_view)
+        st.download_button(
+            "Download Care Plan Markdown",
+            data=export_md,
+            file_name=(
+                f"care_plan_{datetime.now().strftime('%Y%m%d')}.md"
+            ),
+            mime="text/markdown",
+        )
+
         if compare_baseline and baseline is not None:
             with st.expander(
                 "Compare against baseline (single call)", expanded=False

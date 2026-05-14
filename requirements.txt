@@ -3,3 +3,4 @@ anthropic
 pypdf
 python-dotenv
 pydantic
+reportlab
