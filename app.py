@@ -11,12 +11,14 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import datetime
 from pathlib import Path
 
 import streamlit as st
 from pypdf import PdfReader
 
 from pipeline.baseline import run_baseline
+from pipeline.documents import generate_admission_action_plan
 from pipeline.extraction import ResidentProfile, run_initial_extraction
 from pipeline.interview import InterviewSession
 from pipeline.synthesis import (
@@ -183,6 +185,116 @@ def _risk_summary(risk_register: dict) -> str:
         parts.append(f"{sev_count['low']} low")
     breakdown = ", ".join(parts) if parts else "severity unspecified"
     return f"Risk Summary: {total} capability gaps: {breakdown}."
+
+
+# ===== Per-item expanders per artifact tab (Step 10.20) =====
+
+
+def _truncate(text: str, n: int = 90) -> str:
+    text = text.strip()
+    return text if len(text) <= n else text[:n].rstrip() + "…"
+
+
+def _render_care_item_expanders(
+    care_plan: dict, profile: ResidentProfile
+) -> None:
+    """One expander per care-plan item. Label = section · truncated
+    recommendation. Body = full recommendation + rationale + evidence."""
+    items_by_section = [
+        ("Diabetes", "diabetes_care"),
+        ("Dementia", "dementia_care"),
+        ("Fall risk", "fall_risk_care"),
+        ("ADLs", "adl_support"),
+        ("Medications", "medication_management"),
+    ]
+    for section_label, key in items_by_section:
+        for item in care_plan.get(key, []):
+            recommendation = item.get("recommendation", "")
+            label = (
+                f"{section_label} · {_truncate(recommendation, 80)}"
+            )
+            with st.expander(label, expanded=False):
+                st.markdown(recommendation)
+                st.caption(f"Rationale: {item.get('rationale', '')}")
+                _render_evidence_snippets(
+                    profile, item.get("evidence_snippet_ids", [])
+                )
+
+
+def _render_acuity_factor_expanders(
+    recs: dict, profile: ResidentProfile
+) -> None:
+    """One expander per recommended CARE acuity factor. Label = factor
+    name + confidence + disclosure status. Body = WAC citation,
+    disclosure quote (or gap warning), and resident-need evidence."""
+    if recs.get("method_note"):
+        st.caption(recs["method_note"])
+    for rec in recs.get("recommendations", []):
+        name = rec.get("acuity_factor_name", rec.get("acuity_factor_id", "?"))
+        conf = rec.get("confidence", "—")
+        disclosure = (
+            "gap flagged" if rec.get("disclosure_gap_flagged") else "supported"
+        )
+        label = f"{name} — Confidence: {conf} | Disclosure: {disclosure}"
+        with st.expander(label, expanded=False):
+            st.markdown(f"`{rec.get('acuity_factor_id', '')}`")
+            st.markdown(f"_WAC citation:_ {rec.get('wac_citation', '')}")
+            if rec.get("disclosure_support_snippet"):
+                st.markdown(
+                    f"_Disclosure quote:_ > {rec['disclosure_support_snippet']}"
+                )
+            elif rec.get("disclosure_gap_flagged"):
+                st.warning(
+                    "AFH disclosure does not clearly support this capability."
+                )
+            _render_evidence_snippets(
+                profile, rec.get("resident_need_evidence", [])
+            )
+
+
+def _render_risk_gap_expanders(risk: dict, profile: ResidentProfile) -> None:
+    """One expander per risk-register gap. Label = severity tag +
+    resident_need. Body = colored severity badge, missing-support detail
+    in a severity-tinted banner, disclosure quote, suggested action,
+    evidence."""
+    if risk.get("method_note"):
+        st.caption(risk["method_note"])
+    gaps_sorted = sorted(
+        risk.get("gaps", []),
+        key=lambda g: _SEVERITY_ORDER.get(g.get("severity"), 99),
+    )
+    sev_tag = {"high": "[HIGH]", "medium": "[MED]", "low": "[LOW]"}
+    for gap in gaps_sorted:
+        sev = gap.get("severity", "low")
+        need = gap.get("resident_need", "")
+        label = _truncate(
+            f"{sev_tag.get(sev, '[?]')} {need}", 100
+        )
+        with st.expander(label, expanded=False):
+            st.markdown(
+                severity_badge(sev) + f" **{need}**",
+                unsafe_allow_html=True,
+            )
+            missing = gap.get("missing_or_weak_support", "")
+            if sev == "high":
+                st.error(missing)
+            elif sev == "medium":
+                st.warning(missing)
+            else:
+                st.info(missing)
+            if gap.get("disclosure_quote"):
+                st.markdown(f"_Disclosure quote:_ > {gap['disclosure_quote']}")
+            else:
+                st.markdown(
+                    "_Disclosure quote:_ _(disclosure silent on this need)_"
+                )
+            st.markdown(
+                f"_Suggested next action:_ "
+                f"{gap.get('suggested_next_action', '')}"
+            )
+            _render_evidence_snippets(
+                profile, gap.get("evidence_snippet_ids", [])
+            )
 for _k, _v in DEFAULT_STATE.items():
     st.session_state.setdefault(_k, _v)
 
@@ -278,37 +390,252 @@ def _render_acuity_recs(recs: dict, profile: ResidentProfile):
 _SEVERITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 
 
-_RECOMMENDATION_LABELS = {
-    "accept": "ACCEPT",
-    "accept_with_conditions": "ACCEPT WITH CONDITIONS",
-    "hold_for_review": "HOLD FOR REVIEW",
-}
+def render_decision_card(recommendation: str, rationale: str) -> None:
+    """Professional styled recommendation card. Inline-styled HTML so the
+    color signal carries even without the Streamlit theme (which already
+    matches; see .streamlit/config.toml)."""
+    if recommendation == "accept":
+        color, symbol, label = "#2d5f3f", "✓", "ACCEPT"
+    elif recommendation == "accept_with_conditions":
+        color, symbol, label = "#b45309", "!", "ACCEPT WITH CONDITIONS"
+    else:
+        color, symbol, label = "#991b1b", "!", "HOLD FOR REVIEW"
+    st.markdown(
+        f"""
+        <div style="background:{color}; color:white; padding:24px; border-radius:12px; margin-bottom:20px; box-shadow:0 2px 8px rgba(0,0,0,0.10);">
+            <div style="font-size:13px; font-weight:700; letter-spacing:1px; opacity:0.9;">{symbol} RECOMMENDATION</div>
+            <div style="font-size:28px; font-weight:800; margin:8px 0 14px 0;">{label}</div>
+            <div style="font-size:16px; line-height:1.6; opacity:0.96;">{rationale}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
-def _render_intake_decision(decision: dict) -> None:
+def severity_badge(level: str) -> str:
+    colors = {
+        "high": ("#991b1b", "white"),
+        "medium": ("#b45309", "white"),
+        "low": ("#6b7280", "white"),
+    }
+    bg, fg = colors.get(str(level).lower(), ("#6b7280", "white"))
+    return (
+        f'<span style="background:{bg}; color:{fg}; padding:4px 10px; '
+        f'border-radius:6px; font-size:12px; font-weight:700; '
+        f'text-transform:uppercase; margin-right:8px;">{level}</span>'
+    )
+
+
+def find_snippet_references(snippet_id: str, artifacts: dict) -> list[str]:
+    """Return human-readable section labels where snippet_id is cited.
+
+    Scans the four committed artifacts (care_plan, acuity_factor_
+    recommendations, risk_register, intake_decision) via the explicit
+    fields the schemas already use to carry snippet IDs:
+      - care_plan[section][*].evidence_snippet_ids
+      - acuity_factor_recommendations.recommendations[*].resident_need_evidence
+      - risk_register.gaps[*].evidence_snippet_ids
+      - intake_decision.evidence_references[*] (when ref_type == 'snippet')
+
+    Risk-register entries are labeled gap_NN by enumeration index, matching
+    the convention generate_intake_decision uses when assigning gap_ids.
+    """
+    refs: list[str] = []
+
+    care_plan = artifacts.get("care_plan", {}) or {}
+    for section_key in (
+        "diabetes_care",
+        "dementia_care",
+        "fall_risk_care",
+        "adl_support",
+        "medication_management",
+    ):
+        for item in care_plan.get(section_key, []):
+            if snippet_id in item.get("evidence_snippet_ids", []):
+                refs.append(f"Care Plan → {section_key}")
+                break  # one mention per section is enough
+
+    acuity = artifacts.get("acuity_factor_recommendations", {}) or {}
+    for rec in acuity.get("recommendations", []):
+        if snippet_id in rec.get("resident_need_evidence", []):
+            refs.append(
+                f"Acuity Factors → {rec.get('acuity_factor_id', '?')}"
+            )
+
+    risk = artifacts.get("risk_register", {}) or {}
+    for i, gap in enumerate(risk.get("gaps", [])):
+        if snippet_id in gap.get("evidence_snippet_ids", []):
+            refs.append(f"Risk Register → gap_{i:02d}")
+
+    decision = artifacts.get("intake_decision", {}) or {}
+    for ref in decision.get("evidence_references", []):
+        if (
+            ref.get("ref_type") == "snippet"
+            and ref.get("ref_id") == snippet_id
+        ):
+            refs.append("Intake Decision → evidence_references")
+            break
+
+    return refs
+
+
+def _preview_text(text: str, n: int = 70) -> str:
+    """Collapse whitespace and truncate to n chars with an ellipsis suffix
+    if longer. Used for the Evidence Provenance Map expander labels."""
+    cleaned = " ".join(text.split())
+    return cleaned if len(cleaned) <= n else cleaned[:n] + "..."
+
+
+def _render_evidence_provenance_map(
+    combined_artifacts: dict, profile: ResidentProfile
+) -> None:
+    """Live Evidence Provenance Viewer (Step 10.21 + compact refactor).
+
+    Outer expander → coverage counts → referenced snippets grouped by
+    source (each snippet its own collapsed expander) → compact
+    unreferenced section (also one expander per snippet). No full
+    verbatim text is rendered outside an individual snippet expander.
+    """
+    with st.expander("🔍 View Evidence Provenance Map", expanded=False):
+        snippets = profile.evidence_snippets
+
+        # Evidence statistics (counts by source) — always visible.
+        discharge_count = sum(1 for s in snippets if s.source == "discharge")
+        family_count = sum(1 for s in snippets if s.source == "family")
+        operator_count = sum(1 for s in snippets if s.source == "operator")
+        total = len(snippets)
+
+        st.subheader("Evidence Coverage")
+        st.markdown(
+            f"- Discharge summary: {discharge_count} snippets\n"
+            f"- Family notes: {family_count} snippets\n"
+            f"- Operator interview: {operator_count} snippets\n"
+            f"- **Total evidence base: {total} snippets**"
+        )
+
+        # Pre-compute references once per snippet so we can group cleanly.
+        snippet_refs: dict[str, list[str]] = {}
+        unreferenced_list = []
+        for s in snippets:
+            refs = find_snippet_references(s.snippet_id, combined_artifacts)
+            snippet_refs[s.snippet_id] = refs
+            if not refs:
+                unreferenced_list.append(s)
+
+        # Referenced snippets grouped by source. Each snippet renders as
+        # its own collapsed expander — full text only on expand.
+        source_meta = [
+            ("discharge", "Discharge summary evidence"),
+            ("family", "Family notes evidence"),
+            ("operator", "Operator interview evidence"),
+        ]
+        for source_key, source_heading in source_meta:
+            in_source = [
+                s
+                for s in snippets
+                if s.source == source_key
+                and snippet_refs[s.snippet_id]
+            ]
+            if not in_source:
+                continue
+            st.subheader(source_heading)
+            for s in in_source:
+                label = (
+                    f"{s.snippet_id} · {s.source} · "
+                    f"{_preview_text(s.verbatim_text)}"
+                )
+                with st.expander(label, expanded=False):
+                    st.markdown(f"**Full text:** {s.verbatim_text}")
+                    st.markdown("**Referenced in:**")
+                    for ref in snippet_refs[s.snippet_id]:
+                        st.markdown(f"- {ref}")
+
+        # Unreferenced evidence — compact: id + source + preview only.
+        if unreferenced_list:
+            st.subheader(
+                f"⚠ Unreferenced Evidence ({len(unreferenced_list)})"
+            )
+            st.markdown(
+                "These snippets were extracted but not cited in final "
+                "artifacts. Expand a row for full text."
+            )
+            for s in unreferenced_list:
+                label = (
+                    f"{s.snippet_id} · {s.source} · "
+                    f"{_preview_text(s.verbatim_text)}"
+                )
+                with st.expander(label, expanded=False):
+                    st.markdown(f"**Full text:** {s.verbatim_text}")
+                    st.markdown(f"**Claim:** {s.claim}")
+                    st.markdown(
+                        "_(not referenced by any committed artifact)_"
+                    )
+
+
+def _render_intake_decision(
+    decision: dict,
+    artifacts: dict | None = None,
+    profile: ResidentProfile | None = None,
+) -> None:
     rec = decision.get("recommendation", "")
     rationale_full = decision.get("rationale", "")
     rationale_short = _first_two_sentences(rationale_full)
     conditions = decision.get("conditions_before_admission", [])
-    label = _RECOMMENDATION_LABELS.get(rec, rec.upper())
 
-    banner_body = f"### Recommendation: {label}\n\n{rationale_short}"
-    if rec == "accept":
-        st.success(banner_body)
-    elif rec == "accept_with_conditions":
-        st.warning(banner_body)
-    else:  # hold_for_review or unknown — treat as red banner
-        st.error(banner_body)
+    render_decision_card(rec, rationale_short)
 
-    st.subheader("Conditions before admission")
+    # Evidence provenance map — between the decision card and the
+    # conditions checklist. Reveals bidirectional traceability between
+    # extracted evidence and artifact claims.
+    if artifacts is not None and profile is not None:
+        combined = {**artifacts, "intake_decision": decision}
+        _render_evidence_provenance_map(combined, profile)
+
+    st.subheader("✓ Conditions before admission")
     if rec == "accept":
         st.write(
             "No conditions — this resident appears to fit the home's "
             "disclosed capabilities."
         )
-    else:
-        for cond in conditions:
-            st.markdown(f"- {cond}")
+        return
+
+    # Interactive admission checklist with a readiness meter rendered
+    # above it via st.empty() so the count updates same-run when the
+    # operator toggles a checkbox.
+    if "conditions_checked" not in st.session_state:
+        st.session_state.conditions_checked = {}
+
+    total = len(conditions)
+    meter_placeholder = st.empty()
+
+    for idx, condition in enumerate(conditions):
+        key = f"condition_{idx}"
+        # Initialize from nested dict on first encounter; subsequent runs
+        # let Streamlit's auto-key binding own the value to avoid the
+        # "value parameter ignored" warning when both `value` and `key`
+        # are passed and the key is already in session_state.
+        if key not in st.session_state:
+            st.session_state[key] = (
+                st.session_state.conditions_checked.get(key, False)
+            )
+        checked = st.checkbox(condition, key=key)
+        st.session_state.conditions_checked[key] = checked
+
+    checked_count = sum(
+        1
+        for idx in range(total)
+        if st.session_state.conditions_checked.get(
+            f"condition_{idx}", False
+        )
+    )
+
+    with meter_placeholder.container():
+        st.markdown(
+            f"**Admission readiness: {checked_count} of {total} "
+            "conditions resolved**"
+        )
+        if total > 0:
+            st.progress(checked_count / total)
 
 
 def _render_risk_register(reg: dict, profile: ResidentProfile):
@@ -320,7 +647,10 @@ def _render_risk_register(reg: dict, profile: ResidentProfile):
     )
     for gap in gaps_sorted:
         sev = gap["severity"]
-        st.markdown(f"**[{sev.upper()}] {gap['resident_need']}**")
+        st.markdown(
+            severity_badge(sev) + f" **{gap['resident_need']}**",
+            unsafe_allow_html=True,
+        )
         if sev == "high":
             st.error(gap["missing_or_weak_support"])
         elif sev == "medium":
@@ -558,20 +888,36 @@ elif stage == "synthesis_done":
     decision = st.session_state.intake_decision
 
     # Top-of-page: decision banner (with rationale truncated to first 2
-    # sentences) + conditions. The four-metric row is intentionally
-    # removed — the banner now carries operator priority directly.
+    # sentences) + evidence provenance map + conditions checklist.
+    # Provenance map sits between the banner and the conditions per the
+    # Step 10.21 spec; it reads the same artifacts dict used elsewhere on
+    # this page.
     if decision is not None:
-        _render_intake_decision(decision)
+        _render_intake_decision(decision, artifacts, profile)
 
     st.divider()
 
-    tab_summary, tab_care, tab_acuity, tab_risk, tab_profile = st.tabs(
-        ["Summary", "Care Plan", "Acuity Factors", "Risk Register", "Profile"]
+    (
+        tab_summary,
+        tab_action,
+        tab_care,
+        tab_acuity,
+        tab_risk,
+        tab_profile,
+    ) = st.tabs(
+        [
+            "Summary",
+            "Action Plan",
+            "Care Plan",
+            "Acuity Factors",
+            "Risk Register",
+            "Profile",
+        ]
     )
 
-    # Summary — readable in under 30 seconds: provenance box, talking
-    # points, unresolved disagreements, open follow-up questions. No
-    # expanders.
+    # Summary — operator-first order: the actual answer (talking points)
+    # first, process transparency (provenance) second, edge cases
+    # (disagreements / open questions) last, and only when non-empty.
     with tab_summary:
         plan = artifacts["care_plan"]
         acuity_recs = artifacts["acuity_factor_recommendations"]
@@ -580,8 +926,21 @@ elif stage == "synthesis_done":
         # whatever the Unresolved Disagreements section renders is also
         # what the provenance box counts, so the two cannot diverge.
         unresolved_disagreements = plan["unresolved_disagreements"]
+        open_questions = plan.get("open_questions_for_followup", [])
 
-        # Provenance box — all numbers computed live from existing objects.
+        # 1. Talking points — at the top.
+        if decision is not None:
+            tps = decision.get("family_call_talking_points", [])
+            if tps:
+                st.subheader("Talking points for the family call")
+                for tp in tps:
+                    st.markdown(f"- {tp}")
+
+        # 2. Divider.
+        st.divider()
+
+        # 3. Provenance box — all counts computed live from existing
+        # objects.
         operator_answer_count = sum(
             1 for s in profile.evidence_snippets if s.source == "operator"
         )
@@ -614,25 +973,62 @@ elif stage == "synthesis_done":
                 "surfaced for clinical review"
             )
 
-        if decision is not None:
-            tps = decision.get("family_call_talking_points", [])
-            if tps:
-                st.subheader("Talking points for the family call")
-                for tp in tps:
-                    st.markdown(f"- {tp}")
-        if unresolved_disagreements:
+        # 4. Unresolved disagreements — only if any exist.
+        if len(unresolved_disagreements) > 0:
             st.subheader("Unresolved disagreements")
             for d in unresolved_disagreements:
                 st.markdown(f"- {d}")
-        open_qs = plan.get("open_questions_for_followup", [])
-        if open_qs:
+
+        # 5. Open questions for follow-up — only if any exist.
+        if len(open_questions) > 0:
             st.subheader("Open questions for follow-up")
-            for q in open_qs:
+            for q in open_questions:
                 # Strip a leading "N. " numeric prefix so we don't render
                 # double-formatted bullets like "- 1. FOO" when the model
                 # already numbered its own list.
                 cleaned = re.sub(r"^\d+\.\s*", "", q)
                 st.markdown(f"- {cleaned}")
+
+    # Action Plan tab — generates the Draft Admission Action Plan
+    # markdown from existing artifacts on demand. Preview is collapsed
+    # by default so the tab opens with just intro + button visible.
+    with tab_action:
+        st.markdown(
+            "Generate a draft admission worksheet from the current "
+            "intake artifacts. This is not a legal agreement and "
+            "requires operator review."
+        )
+        if st.button("Generate Draft Admission Action Plan"):
+            resident_name = (
+                profile.demographics.resident_name_placeholder
+                or "Resident (name not documented)"
+            )
+            st.session_state.admission_action_plan = (
+                generate_admission_action_plan(
+                    resident_name=resident_name,
+                    afh_name="AFH Operator",
+                    artifacts={
+                        **artifacts,
+                        "intake_decision": decision,
+                    },
+                    profile=profile,
+                )
+            )
+        plan_text = st.session_state.get("admission_action_plan")
+        if plan_text:
+            st.download_button(
+                label="Download Draft Action Plan",
+                data=plan_text,
+                file_name=(
+                    "admission_action_plan_"
+                    f"{datetime.now().strftime('%Y%m%d')}.md"
+                ),
+                mime="text/markdown",
+            )
+            with st.expander(
+                "Preview Draft Action Plan", expanded=False
+            ):
+                st.markdown(plan_text)
 
     # Care Plan / Acuity Factors / Risk Register — existing renderers
     # unchanged.
@@ -650,17 +1046,34 @@ elif stage == "synthesis_done":
 
     with tab_care:
         st.info(_care_plan_summary(artifacts["care_plan"]))
-        _render_in_tab("care_plan", _render_care_plan)
+        _render_care_item_expanders(artifacts["care_plan"], profile)
+        if compare_baseline and baseline is not None:
+            with st.expander(
+                "Compare against baseline (single call)", expanded=False
+            ):
+                _render_care_plan(baseline["care_plan"], profile)
     with tab_acuity:
         st.info(
             _acuity_summary(artifacts["acuity_factor_recommendations"])
         )
-        _render_in_tab(
-            "acuity_factor_recommendations", _render_acuity_recs
+        _render_acuity_factor_expanders(
+            artifacts["acuity_factor_recommendations"], profile
         )
+        if compare_baseline and baseline is not None:
+            with st.expander(
+                "Compare against baseline (single call)", expanded=False
+            ):
+                _render_acuity_recs(
+                    baseline["acuity_factor_recommendations"], profile
+                )
     with tab_risk:
         st.warning(_risk_summary(artifacts["risk_register"]))
-        _render_in_tab("risk_register", _render_risk_register)
+        _render_risk_gap_expanders(artifacts["risk_register"], profile)
+        if compare_baseline and baseline is not None:
+            with st.expander(
+                "Compare against baseline (single call)", expanded=False
+            ):
+                _render_risk_register(baseline["risk_register"], profile)
 
     # Profile — developer telemetry moved here from the sidebar.
     with tab_profile:
