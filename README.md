@@ -1,129 +1,199 @@
 # AFH Acuity Intake Copilot
 
-A staged GenAI pipeline for the Adult Family Home (AFH) intake conversation
-in Washington State. Built against committed state `caa3bea`.
+A GenAI decision-support application for Washington State Adult Family
+Home (AFH) operators performing pre-admission resident intake.
 
-## 1. Context, user, problem
+It helps one specific user complete one specific workflow:
 
-**User.** Washington State Adult Family Home (AFH) operators. AFHs are
-small, residentially-zoned licensed homes that take 2-6 elderly or
-disabled residents — typically Medicaid-funded. The operator is the
-person on the phone with the discharging hospital and the family,
-deciding whether they can safely accept the resident and how the
-placement will be paid.
+> Decide whether a prospective resident can be safely admitted to an
+> Adult Family Home, surface the unresolved clinical and operational
+> concerns, and produce an actionable, evidence-grounded move-in plan.
 
-**Workflow being improved.** The pre-admission intake: read the
-discharge summary, listen to the family, cross-check against the home's
-DSHS Disclosure of Services, and decide whether to accept. Today this
-is paper-driven, intuition-heavy, and inconsistent across operators.
+Built as a Streamlit app on Claude, using structured schemas,
+deterministic interview logic, evidence-linked artifact generation, and
+a measured comparison against a simpler one-shot LLM workflow.
 
-**Why it matters.**
+---
 
-- **Revenue leak from under-billing.** WA AFH Medicaid payment is set
-  by the DSHS CARE assessment (Groups A-Low through E-High per WAC
-  388-106-0125). Acuity factors the operator forgets to mention to the
-  case manager during the CARE interview translate directly to lower
-  classifications and lower daily rates. Operators routinely under-
-  document insulin scope, behavioral resistance, and fall risk — all
-  scored acuity factors in WAC 388-106-0095, -0100, and -0105.
-- **Safety risk from mismatched placement.** AFHs that accept a
-  resident they cannot safely manage (exit-seeking dementia without
-  secured egress, sliding-scale insulin without delegating RN, two-
-  person transfer with single overnight staff) face WAC 388-76
-  enforcement, involuntary discharge, and resident harm. Today the
-  capability-vs-need check happens in the operator's head, not against
-  the home's written disclosure.
+## 1. Context, user, and problem
+
+### Who the user is
+
+**Washington State Adult Family Home operators.**
+
+AFHs are small, residentially-zoned licensed homes serving elderly or
+disabled residents, often Medicaid-funded. The operator is the person on
+the phone with the discharging hospital or the family, deciding whether
+the home can safely accept a resident and how the placement will be
+supported. They are not a hospital intake department — they are usually
+a single operator with limited time and no clinical analytics team.
+
+### The workflow being improved
+
+Pre-admission intake. For each prospective resident the operator must:
+
+1. Read the patient's clinical record (a hospital discharge summary, an
+   H&P, or current provider notes — residents do not always arrive
+   straight from a hospital).
+2. Review family or proxy notes.
+3. Cross-check resident needs against the home's written **AFH
+   Disclosure of Services**.
+4. Identify unresolved clinical, staffing, or capability concerns.
+5. Decide whether admission can proceed.
+6. Produce the follow-up actions required before move-in.
+
+Today this is paper-driven, intuition-heavy, and inconsistent between
+operators.
+
+### Why it matters
+
+**Revenue leak from under-documentation.** Washington AFH Medicaid
+payment is set through the DSHS CARE assessment. Acuity that the operator
+fails to surface — insulin scope, behavioral resistance, fall risk,
+medication-administration burden — can translate to a lower
+classification and a lower daily rate.
+
+**Safety risk from mismatched placement.** A home that accepts a
+resident it cannot safely manage faces licensing risk, involuntary
+discharge, or resident harm — for example exit-seeking dementia without
+secured egress, insulin support without a delegating RN, two-person
+transfers with single overnight staffing, or wound-care needs absent
+from the disclosure document. Today this capability-vs-need check often
+happens in the operator's head rather than against the home's written
+disclosure.
+
+---
 
 ## 2. Solution and design
 
-**Flow.** Intake source documents → Stage 1 extraction → Stage 2
-stateful interview → Stage 3 synthesis (three artifacts) → Stage 4
-operator-facing decision view.
+### What I built
 
-1. **Stage 1 — Initial Extraction** (`pipeline/extraction.py`). The
-   discharge summary, family-reported notes, and the AFH disclosure
-   text are fed to Claude with a forced tool call against a Pydantic
-   `ResidentProfile` schema. Every populated field carries at least
-   one `EvidenceSnippet` with the verbatim quote that supports it.
-   Material conflicts between discharge and family are recorded as
-   `SourceDisagreement` entries — the field is populated with the
-   safer interpretation and the disagreement is preserved.
-2. **Stage 2 — Stateful Interview** (`pipeline/interview.py`). For
-   each triggered condition (diabetes / dementia / fall risk), an
-   `InterviewSession` walks a JSON questioning tree in canonical order.
-   The operator answers in plain language; a deterministic local
-   parser handles boolean/numeric/enum patterns first, with Claude as
-   a tightly-scoped fallback. Each answer mutates the shared profile
-   at the exact `updates_profile_field` path and records an operator-
-   sourced evidence snippet. Branching is governed by the tree, never
-   by the LLM.
-3. **Stage 3 — Synthesis** (`pipeline/synthesis.py`). Three forced-
-   tool-call functions over the assembled profile produce:
-   - a care plan organized by condition / ADLs / medications, with
-     `evidence_snippet_ids` on every item;
-   - a list of CARE acuity-factor recommendations (drawn from
-     `data/dshs_rules.json`, twelve acuity factors per
-     WAC 388-106-0090/-0095/-0100/-0105/-0110/-0125) with disclosure
-     match-or-gap per factor;
-   - a capability-gap risk register against the AFH disclosure, with
-     severity, suggested next action, and verbatim disclosure quote
-     where available.
-4. **Stage 4 — Intake Decision** (`pipeline/synthesis.py:
-   generate_intake_decision`). A re-organizer that consumes the three
-   artifacts plus profile source-disagreements and emits a single
-   `IntakeDecision` (accept / accept_with_conditions /
-   hold_for_review) with rationale, pre-admission conditions, family-
-   call talking points, and existing-ID evidence references. It does
-   not re-read source documents.
+**AFH Acuity Intake Copilot** — a Streamlit app that guides an operator
+from raw intake documents to an admission review package.
 
-A baseline single-call workflow (`pipeline/baseline.py`) does the
-entire pipeline in one prompt for comparison.
+It produces:
 
-![Architecture](docs/architecture.png)
+- an admission verdict (`accept` / `accept_with_conditions` /
+  `hold_for_review`),
+- an owner-grouped move-in action plan,
+- a resident care plan,
+- Washington CARE-factor recommendations with WAC references,
+- capability gaps measured against the AFH disclosure,
+- an evidence trail behind every major claim,
+- a downloadable Admission Action Plan (PDF / markdown).
 
-**Why a staged pipeline beats a one-shot LLM.**
+The result is organized around the operator's mental model, not the
+backend pipeline. The Results page leads with a verdict status block
+(severity-colored, with the concern count, readiness progress, and which
+owners to contact first), then tabbed detail:
 
-- **Stateful interview captures operator-tacit information.** The
-  operator's knowledge of overnight staffing, prior placements, and
-  family communication preferences is not in the discharge summary
-  and is not in the family notes. A one-shot LLM never asks for it.
-  The tree-driven Stage 2 forces these into the record.
-- **Three-way evidence grounding.** Every claim in the artifacts cites
-  an `evidence_snippet_id` that traces to verbatim text from either
-  the discharge (Stage 1), the family notes (Stage 1), or the operator
-  interview (Stage 2). Min-length=1 on the Pydantic evidence lists
-  rejects unsupported claims at validation time.
-- **Reconciliation of source disagreements.** Stage 1 detects
-  material conflicts between discharge and family on the same field
-  (orientation, fall pattern, medication scope). The disagreement is
-  carried forward; Stage 2 can append an operator clarification to
-  the same record; Stage 3 surfaces it in the care plan; Stage 4
-  factors it into the recommendation.
+- **Action Plan** — interactive worklist grouped by owner, priority, and
+  task type, with an inline owner filter and a downloadable worksheet.
+- **Family Communication** — a clean numbered call script.
+- **Care Plan** — a printable clinical reference with an executive
+  "Clinical summary" and grouped, evidence-linked care items.
+- **Capability Gaps** — why admission may be on hold: the concern, the
+  recommended next step, and the evidence.
+- **CARE Factors** — Washington CARE-informed acuity recommendations with
+  WAC citations, confidence, and disclosure-gap status.
+- **Evidence Map** — the full provenance/audit view: every snippet,
+  filterable by source and by where it is cited.
+- **Sources & Debug** — structured profile and developer telemetry.
 
-**Where GenAI adds value vs. where the system is deterministic.**
+### How it works
 
-| Component | Approach |
-|---|---|
-| Parsing unstructured discharge / family text into structured fields | GenAI (Claude tool use against Pydantic schema) |
-| Parsing operator natural-language answers into a typed value | Deterministic local parser first (boolean / numeric / enum synonyms), Claude fallback only when local parser is not confident |
-| Narrative synthesis of care plan / recommendations / risk register with evidence binding | GenAI (Claude tool use, evidence-ID-required schema) |
-| Questioning tree branching (`next_node_logic`) | Deterministic — controlled by the tree JSON, not the model |
-| DSHS acuity-factor reference lookups | Deterministic — `data/dshs_rules.json` is the authoritative catalog |
-| Risk-register severity sorting | Deterministic — `{high: 0, medium: 1, low: 2}` at render time |
-| Intake recommendation logic (accept / conditions / hold) | Deterministic rules expressed in the Stage 4 system prompt; the LLM applies them top-to-bottom |
+```text
+Clinical record + family notes + AFH disclosure
+        ↓
+Stage 1: structured extraction (Claude, forced tool call → Pydantic)
+        ↓
+Stage 2: deterministic guided interview (JSON trees; local parser → Claude)
+        ↓
+Stage 3: artifact synthesis (care plan, CARE factors, capability gaps)
+        ↓
+Stage 4: rule-based intake decision + operator-facing Results
+```
+
+**Stage 1 — Extraction (`pipeline/extraction.py`).** Claude is called
+with a forced tool call against a Pydantic `ResidentProfile` schema.
+Every populated field carries at least one `EvidenceSnippet` with
+verbatim supporting text; material conflicts across sources are recorded
+as `SourceDisagreement` entries.
+
+**Stage 2 — Guided interview (`pipeline/interview.py`).** For each
+triggered condition (diabetes, dementia, fall risk) the app walks a JSON
+questioning tree. **The tree controls the path, not the LLM.** Each node
+declares its expected answer shape, options, the profile field it
+updates, and branching logic. A deterministic local parser resolves
+simple boolean / numeric / enum answers; Claude is only used when an
+answer needs natural-language interpretation. The operator answers with
+buttons, booleans, numeric inputs, checkbox multi-selects for
+multi-applicable questions, or a free-text override, and can step
+**Back** to revise a prior answer or defer one with **Ask later**.
+
+**Stage 3 — Synthesis (`pipeline/synthesis.py`).** The assembled profile
+produces the care plan, CARE-factor recommendations (referenced against
+the curated `data/dshs_rules.json` catalog of 12 Washington CARE-related
+factors), and the disclosure-vs-need capability gaps. Each item cites
+supporting evidence IDs; unsupported claims fail validation at tool-call
+time rather than reaching the operator.
+
+**Stage 4 — Decision.** A rule-based layer consumes the generated
+artifacts and source disagreements (it does not re-read the source
+documents) and emits one recommendation plus rationale, conditions
+before admission, family-call points, and owner-grouped actions.
+
+### Key GenAI design choices
+
+- **GenAI where the work is genuinely unstructured** — parsing messy
+  discharge narratives, reconciling conflicting sources, and turning
+  findings into operator-facing prose. Checklists or keyword rules can
+  spot "insulin" or "walker" but cannot reconcile context and
+  contradiction.
+- **Determinism where it must hold** — interview branching is JSON-tree
+  controlled, CARE references come from a curated rules file, severity
+  ordering is deterministic, and the final recommendation follows
+  rule-based logic.
+- **Evidence-grounded by construction** — every profile field and every
+  synthesized item is tied to a verbatim snippet ID; the audit trail is
+  a first-class output, surfaced in the Evidence Map and kept out of the
+  operator's reading flow so prose stays plain English.
+- **Disclosure as a first-class input** — resident needs are explicitly
+  cross-checked against the home's written disclosure, which is the
+  check operators most often do informally.
+- **Simplest design that supports evaluation** — no RAG, no agents, no
+  multi-model routing; a single provider with structured tool calls.
+
+---
 
 ## 3. Evaluation and results
 
-<!-- VERIFY THESE NUMBERS BEFORE COMMIT -->
+All numbers below are read from `evals/results/results_full.json` and
+`evals/results/results_baseline.json`, run against eight synthetic
+resident cases in `data/test_cases/`.
 
-All numbers in this section are read directly from
-`evals/results/results_full.json` and
-`evals/results/results_baseline.json`, produced by
-`evals/run_evals.py` against the eight synthetic test cases in
-`data/test_cases/`. The full pipeline ran Stage 1 + an auto-answered
-Stage 2 + Stage 3; the baseline ran `run_baseline(...)` once.
+### Baseline compared against
 
-**Per-case scores:**
+A **single-call, prompt-only workflow** (`pipeline/baseline.py`): it
+receives the same discharge, family, and disclosure text and produces
+all outputs in one Claude call. It has no structured interview, no local
+parser, no evidence graph, no persistent source-disagreement object, no
+deterministic branching, and no multi-step validation. This represents
+the realistic "just ask the model once" alternative.
+
+### What counted as good output
+
+- acuity-factor precision and recall
+- capability-gap precision and recall
+- source-disagreement detection
+- hallucinated evidence references (citing a snippet ID that does not
+  exist in the resident profile)
+
+The full pipeline ran extraction → auto-answered interview → synthesis;
+the baseline ran one prompt. Ground truth is encoded per case in
+`data/test_cases/*.json`.
+
+### Per-case scores
 
 | case | full P | full R | base P | base R | halluc f | halluc b | disagr f | disagr b | gap P f | gap P b | gap R f | gap R b |
 |------|-------:|-------:|-------:|-------:|---------:|---------:|:--------:|:--------:|--------:|--------:|--------:|--------:|
@@ -131,177 +201,154 @@ Stage 2 + Stage 3; the baseline ran `run_baseline(...)` once.
 | case_02 | 0.60 | 1.00 | 0.50 | 1.00 | 0 | n/a | yes | yes | 0.83 | 0.60 | 1.00 | 0.50 |
 | case_03 | 0.25 | 1.00 | 0.20 | 1.00 | 0 | n/a | yes | yes | 0.75 | 0.60 | 1.00 | 1.00 |
 | case_04 | 0.80 | 1.00 | 0.67 | 1.00 | 0 | n/a | yes | yes | 0.86 | 1.00 | 1.00 | 1.00 |
-| case_05 | 0.50 | 1.00 | 0.50 | 1.00 | 0 | n/a | no  | yes | 1.00 | 1.00 | 1.00 | 1.00 |
+| case_05 | 0.50 | 1.00 | 0.50 | 1.00 | 0 | n/a | no | yes | 1.00 | 1.00 | 1.00 | 1.00 |
 | case_06 | 0.90 | 1.00 | 0.75 | 1.00 | 0 | n/a | yes | yes | 0.90 | 0.89 | 1.00 | 1.00 |
 | case_07 | 0.25 | 1.00 | 0.20 | 1.00 | 0 | n/a | yes | yes | 0.60 | 0.80 | 0.67 | 0.67 |
 | case_08 | 0.40 | 1.00 | 0.33 | 1.00 | 0 | n/a | yes | yes | 1.00 | 1.00 | 1.00 | 0.67 |
 
-**Macro averages (8 cases):**
+### Macro averages
 
 | Metric | Full pipeline | Baseline |
 |---|---:|---:|
-| Acuity factor precision | **0.46** | 0.39 |
-| Acuity factor recall | 1.00 | 1.00 |
-| Hallucination count (cited snippet IDs not in profile) | **0.00** | n/a (baseline has no traceable evidence layer) |
+| Acuity-factor precision | **0.46** | 0.39 |
+| Acuity-factor recall | 1.00 | 1.00 |
+| Hallucination count | **0.00** | n/a |
 | Capability-gap precision | 0.74 | 0.74 |
 | Capability-gap recall | **0.96** | 0.85 |
-| Source-disagreement detection correct (binary, 8 cases) | **4 / 8** | 2 / 8 |
+| Source-disagreement detection correct | **4 / 8** | 2 / 8 |
 
-The full pipeline wins on precision (+0.07), capability-gap recall
-(+0.11), hallucination discipline (0 vs unmeasurable), and
-disagreement-detection correctness (4 vs 2). Recall is tied — both
-pipelines reliably surface every required factor; the staged pipeline
-just over-recommends less.
+The staged pipeline improved acuity-factor precision (+0.07),
+capability-gap recall (+0.11), and source-disagreement detection
+(2/8 → 4/8), with **zero hallucinated evidence references**. Recall on
+acuity factors tied — both systems surfaced every required factor, but
+the staged pipeline over-recommended less.
 
-### Three qualitative examples
+### Qualitative examples
 
-**Clear win — case_06 (all three conditions, complex multi-system acuity).**
+**Clear win — case_06.** All three modeled conditions, complex
+multi-system acuity. Ground truth: 9 factors. Full pipeline recommended
+10 (all 9 + 1 false positive, precision 0.90); baseline recommended 12
+(all 9 + 3 false positives, precision 0.75). The staged system was more
+disciplined and preserved better evidence linkage.
 
-- Ground truth expects 9 factors; should-NOT-recommend = `CARE-TRANSFER-2PERSON`, `CARE-WOUND-CARE`.
-- Full pipeline recommended 10 factors — caught all 9 expected plus one false positive (`CARE-WOUND-CARE`). Precision **0.90**.
-- Baseline recommended 12 factors — caught the 9 expected plus three false positives (`CARE-MOOD-DEPRESS`, `CARE-TRANSFER-2PERSON`, `CARE-WOUND-CARE`). Precision **0.75**.
-- Full first high-severity gap: *"Basal-bolus sliding-scale insulin administration (Humalog four times daily based on fingerstick BG plus glargine 25 units at bedtime) requir…"* — specific to the resident's regimen.
-- Baseline first high-severity gap: *"Sliding-scale Humalog (four times daily) and glargine (bedtime) insulin administration by AFH caregivers."* — same topic, less specificity, and the baseline still over-fired `CARE-TRANSFER-2PERSON` despite no documented two-person transfer need.
+**Tie — case_05.** Dementia + fall risk with a cognitive-mobility
+mismatch. Both systems recommended the same factors and the same false
+positives (precision 0.50 each). The full pipeline still carried
+traceable evidence IDs; the baseline had no structural evidence layer.
 
-**Tie — case_05 (dementia + fall risk, cognitive-mobility mismatch).**
+**Honest failure — case_01.** Low-acuity diabetes (metformin only, no
+insulin, no hypoglycemic history, full ADL independence). Ground truth:
+zero acuity factors. The full pipeline still recommended
+`CARE-INSULIN-BGM` and `CARE-MED-ADMIN-MULTI`; the baseline also
+over-recommended. Root cause: seeing "diabetes" pulls diabetes-shaped
+acuity factors even when the clinical-complexity threshold is not met.
+This is the dominant failure mode.
 
-- Ground truth expects `CARE-BEHAV-DEMENTIA`, `CARE-COG-IMPAIR`, `CARE-FALL-RISK`, `CARE-MED-ADMIN-MULTI`.
-- Both pipelines recommended the same 8 factors: the 4 expected plus 4 false positives (`CARE-INCONT-BB`, `CARE-MOOD-DEPRESS`, `CARE-TOILET-ASSIST`, `CARE-WANDER-EXIT`). Precision **0.50 vs 0.50**, recall **1.00 vs 1.00**, gap precision **1.00 vs 1.00**.
-- Full first high-severity gap: *"Nighttime fall prevention for a resident who frequently attempts unassisted ambulation at night, is unsteady without a walker, inconsistentl…"*
-- Baseline first high-severity gap: *"Overnight fall prevention for a resident who frequently attempts to stand and ambulate unassisted at night, resulting in a documented fall w…"*
-- Both pipelines converged on the same operationally-useful framing. The only edge for the full pipeline on this case is hallucination discipline (0 vs unmeasurable).
+### Where it breaks down
 
-**Honest failure — case_01 (well-controlled type 2 diabetes, simple case).**
+- **Over-recommendation** when a diagnosis is present but the clinical
+  threshold is not met (e.g. metformin-only diabetes triggering
+  insulin/BGM complexity). A future fix is to require each recommendation
+  to map more tightly to a specific WAC criterion.
+- **The baseline sometimes matches or beats it** — on case_04 the
+  baseline scored higher capability-gap precision (1.00 vs 0.86) because
+  the full pipeline added a borderline gap outside the expected category.
+- **Input limits** — no OCR for image-only scanned PDFs, Washington-only
+  CARE/WAC assumptions, only diabetes/dementia/fall-risk modeled, and no
+  PII-handling controls.
 
-- Ground truth expects **zero** acuity factors (`should_recommend_factors: []`). The resident is on metformin only, A1C 6.8%, no insulin, no hypoglycemic history, fully independent.
-- Full pipeline recommended `CARE-INSULIN-BGM` and `CARE-MED-ADMIN-MULTI`. Neither is correct — there is no insulin in the regimen and metformin alone does not meet the multi-medication clinical-complexity threshold. Precision **0.00**.
-- Baseline recommended `CARE-FALL-RISK`, `CARE-INSULIN-BGM`, `CARE-MED-ADMIN-MULTI`, `CARE-MOOD-DEPRESS` — four false positives. Precision **0.00**.
-- Full care-plan summary: *"Resident A is a 74-year-old female with well-controlled type 2 diabetes (HbA1c 6.8%) managed on metformin only, no insulin, no hypoglycemic history, and fully independent in all AD…"* — the summary correctly described the resident as low-acuity, but the acuity-recommendation tool still fired on the presence of diabetes-as-a-diagnosis. The staged pipeline saw "diabetes" and reached for the diabetes-shaped factor even though the resident's clinical profile didn't trigger the WAC criteria.
-- This is the dominant failure mode and the right place to push next (see below).
+### Where a human stays involved
 
-### Where the system breaks down
+The system is decision *support*, not a decision maker. It does not make
+final clinical, billing, legal, or admission decisions. The operator,
+family, physician, delegating RN, and care team must review the outputs.
+Capability gaps and concerns are explicitly framed for human follow-up,
+and the rationale/evidence is always inspectable.
 
-- **Most common failure mode of the full system across the 8 cases.** Over-recommendation of acuity factors when a diagnosis is present but the clinical-complexity thresholds in WAC 388-106-0095/-0100/-0105 are not actually met. Precision averages 0.46; recall is 1.00. The system reliably catches what should fire, but it also fires on related-but-not-triggering conditions (e.g., metformin-only diabetes triggering `CARE-INSULIN-BGM`, generic dementia diagnosis triggering `CARE-MOOD-DEPRESS`). The synthesis prompt currently weights "evidence of the broad condition" too generously; a future revision should tie each recommendation to a specific WAC criterion match, not just to the presence of the condition.
-- **One case where the baseline matched or beat the full pipeline.** On **case_04** (diabetes + dementia, insulin-resistance behavior), the baseline scored **gap precision 1.00 vs the full pipeline's 0.86**. The baseline's risk register had fewer, tighter gaps that all mapped cleanly to expected categories; the full pipeline added an extra borderline gap on injection-time staffing scheduling that didn't match a ground-truth expected gap. The full pipeline still beat the baseline on acuity-factor precision (0.80 vs 0.67) and disagreement detection on this case.
-- **Input the system explicitly does not handle.** Scanned or OCR'd PDF disclosures (`pypdf` extracts text from native PDFs only — image-based scans return empty); non-Washington-State Medicaid intake (the DSHS rule reference, WAC citations, and specialty-contract names are all WA-specific); real PII in inputs (the pipeline is designed for synthetic test data, and Stage 1's PII hygiene rule is enforced by prompt rather than by a structural redaction step).
+---
 
-## 4. What Makes This System Different from a One-Shot LLM
+## 4. Artifact snapshot
 
-- **Deterministic branching interview.** Stage 2 walks
-  `data/trees/{diabetes,dementia,fall_risk}.json` as a state machine.
-  Each node specifies `expected_answer_shape`, `answer_options`,
-  `updates_profile_field`, and `next_node_logic` with conditional
-  `goto` edges. Flow control belongs to the tree; the LLM parses
-  each operator answer into the typed value the current node demands.
-  Branching is reproducible across runs and auditable as JSON.
-- **Evidence-grounded snippet IDs.** Every populated field in
-  `ResidentProfile` is paired with at least one `EvidenceSnippet`
-  (schema in `pipeline/extraction.py`: `snippet_id`, `claim`,
-  `source ∈ {discharge | family | operator}`, `verbatim_text`). The
-  care plan, acuity-factor recommendations, and risk register
-  reference those IDs through `evidence_snippet_ids` and
-  `resident_need_evidence` fields constrained with Pydantic
-  `min_length=1`, so unsupported claims fail validation at tool-call
-  time rather than reaching the operator.
-- **Disclosure-vs-resident cross-checking.** The AFH disclosure of
-  services is a first-class Stage 3 input. Each acuity-factor
-  recommendation carries either a `disclosure_support_snippet`
-  (verbatim quote from the disclosure) or
-  `disclosure_gap_flagged = true`. The capability-gap risk register
-  (`CapabilityGap`) emits one entry per documented resident need that
-  lacks supporting disclosure language, with severity, suggested
-  action, and the verbatim disclosure quote where one exists.
-- **Operator-facing decision layer.** `generate_intake_decision`
-  (Stage 4 in `pipeline/synthesis.py`) consumes only the three Stage
-  3 artifacts plus the profile's source-disagreement list — never the
-  source documents — and emits an `IntakeDecision` with one of three
-  enumerated recommendations
-  (`accept` / `accept_with_conditions` / `hold_for_review`),
-  pre-admission conditions, family-call talking points, and
-  `EvidenceRef` entries pointing exclusively to existing snippet,
-  acuity-factor, or risk-register-entry IDs. The recommendation logic
-  (any high-severity gap → `hold_for_review`; else any disclosure
-  gap → `accept_with_conditions`; else `accept`) is encoded as a
-  deterministic rule in the Stage 4 system prompt.
+The app is a runnable Streamlit application. A full walkthrough on one
+example (no live system required at review time):
 
-**Measured against the eight-case evaluation.**
+1. **Inputs** — paste a clinical record + family notes (disclosure
+   recommended). Required-field gating; weak-PDF-extraction warning.
+2. **Confirm what we extracted** — Stage-1 structured profile snapshot
+   (diabetes / insulin / falls / dementia / ADL fields).
+3. **Interview** — condition-specific questions as buttons / booleans /
+   numeric / checkbox multi-selects, with **← Back**, **Ask later**, a
+   numbered-step workflow indicator, and a live "Captured so far"
+   sidebar.
+4. **Ready to generate** — counts of operator answers, conditions,
+   disagreements, and open unknowns.
+5. **Results** — verdict status block (concern count, readiness bar, who
+   to contact first), then the tabbed detail described in §2.
+6. **Download** — Admission Action Plan PDF; per-tab evidence is
+   inspectable and clickable into the Evidence Map.
 
-- A single intake walk on **case_04** (diabetes + dementia) produced:
-  **22 structured operator interview responses** across **2 clinical
-  conditions**, **49 evidence snippets** indexed across discharge,
-  family, and operator sources, **1 AFH Disclosure of Services
-  document** cross-checked against resident needs, **5 acuity
-  factors** evaluated against the WAC 388-106 catalog, **7 disclosure
-  gaps** with severity ranking, and **1 unresolved source
-  disagreement** preserved across the artifacts. The Summary tab's
-  provenance box surfaces these counts live.
-- Across all 8 cases: macro acuity-factor precision **0.46 vs 0.39**
-  (Δ +0.07), capability-gap recall **0.96 vs 0.85** (Δ +0.11),
-  source-disagreement detection correct on **4 of 8 vs 2 of 8**, and
-  **0 hallucinated evidence references** in the staged pipeline.
-  The baseline has no structural evidence layer against which to
-  measure hallucination.
+Sample inputs/outputs live in `data/test_cases/` (inputs) and
+`evals/results/` (machine-readable outputs and the comparison table).
+Optional screenshots can be dropped in `docs/screenshots/`
+(e.g. `results.png`, `action-plan.png`, `care-plan.png`,
+`care-factors.png`, `capability-gaps.png`, `evidence-map.png`,
+`interview.png`); the README, eval results, and walkthrough stand on
+their own without them.
 
-## 5. Artifact snapshots
+---
 
-The three views below illustrate the operator-facing surface. Open
-Streamlit (see Setup) and walk a case through to reproduce.
+## Setup and usage
 
-- `docs/screenshot_decision.png` — top-of-page decision view: colored
-  recommendation banner (red for hold_for_review, yellow for
-  accept_with_conditions, green for accept), rationale truncated to
-  the first 2 sentences, and the pre-admission conditions list.
-- `docs/screenshot_interview.png` — stateful interview with the
-  progress bar, the section breadcrumb (`Dementia → Diagnosis`), the
-  `Question X of up to Y · ~N minutes remaining` counter, and the
-  current question with its context hint expander.
-- `docs/screenshot_evidence.png` — an expanded evidence snippet
-  showing the `snippet_id`, the source label (discharge / family /
-  operator), the claim, and the verbatim source text — the
-  traceability that makes every artifact claim auditable.
-
-## 6. Setup
+### Install
 
 ```bash
-# 1. Clone
 git clone <repo-url> afh-intake-copilot
 cd afh-intake-copilot
-
-# 2. Create a virtual environment and install dependencies
 python3 -m venv venv
 ./venv/bin/pip install -r requirements.txt
+```
 
-# 3. Configure the Anthropic API key
+### Provide the API key
+
+This project requires an Anthropic API key. It is read from a `.env`
+file (git-ignored — no key is committed):
+
+```bash
 cp .env.example .env
-# then edit .env and replace 'your_key_here' with your actual key
+# then edit .env and set:
+# ANTHROPIC_API_KEY=sk-ant-...
+```
 
-# 4. Run the Streamlit app
+### Run the app
+
+```bash
 ./venv/bin/streamlit run app.py
 ```
 
-**End-to-end example with the case_04 fixture:**
+### Run it on one example
+
+Pull the inputs from a bundled synthetic case and paste them into the UI:
 
 ```bash
-# Paste the contents of these two fields into the UI's input form:
 cat data/test_cases/case_04.json | jq -r '.inputs.discharge_summary'
 cat data/test_cases/case_04.json | jq -r '.inputs.family_notes'
-
-# Then click "Start Intake", walk through the 22-question interview
-# (the local parser will short-circuit ~12 of the 22 nodes; the rest
-# go to Claude), then click "Generate Artifacts" and review the five
-# tabs.
 ```
 
-To re-run the evaluation harness across all eight cases:
+Then: Start intake → confirm the extracted profile → complete the guided
+interview → generate Results → review Action Plan, Family Communication,
+Care Plan, Capability Gaps, CARE Factors, and the Evidence Map.
+
+### Re-run the evaluation
 
 ```bash
 ./venv/bin/python evals/run_evals.py
-# Results: evals/results/results_full.json,
-#          evals/results/results_baseline.json,
-#          evals/results/comparison_table.txt
+# writes:
+#   evals/results/results_full.json
+#   evals/results/results_baseline.json
+#   evals/results/comparison_table.txt
 ```
 
-Smoke tests for each pipeline stage (each runs against case_04):
+### Smoke tests
 
 ```bash
 ./venv/bin/python test_extraction.py
@@ -312,38 +359,49 @@ Smoke tests for each pipeline stage (each runs against case_04):
 ./venv/bin/python test_intake_decision_distribution.py
 ```
 
-## 7. Scope and limitations
+---
 
-- **Geography.** Washington State only. All WAC citations, specialty-
-  contract names (SBS / RSW / ECS / EARC-SDC / Meaningful Day / CSS),
-  the CARE classification matrix, and the disclosure form (DSHS
-  10-409) are WA-specific. The pipeline will run on out-of-state
-  inputs but will mis-cite regulatory authority.
-- **Clinical conditions.** Three only: diabetes, dementia, fall risk.
-  These are the conditions for which `data/trees/*.json` defines a
-  structured interview. Other common AFH resident conditions
-  (COPD with oxygen, dialysis, mental-health behavioral support,
-  developmental disabilities) are not modeled.
-- **Acuity factors.** Twelve only — the curated set in
-  `data/dshs_rules.json`, derived from the five CARE acuity domains
-  in WAC 388-106-0090 / -0095 / -0100 / -0105 / -0110. The
-  `monthly_add_on_estimate_usd` field is null on every entry by
-  design: Washington AFH Medicaid payment is set by the DSHS CARE
-  assessment plus rate authorization, not by per-factor add-ons.
-- **Test data.** Eight synthetic cases (`Resident A` through
-  `Resident H`). No real PII. No real residents. The system is not
-  validated on real intake documents.
-- **Decision-support framing.** The artifacts are decision support,
-  not clinical, legal, or billing determinations. The
-  `review_required = true` field on every acuity recommendation is
-  structural, not advisory: the AFH operator, family, and
-  prescriber (where applicable) must review before any care or
-  admission decision.
-- **Difference from HW2.** HW2 was a prompt-only, single-call LLM
-  that read source documents and emitted recommendations directly.
-  It had no structured interview, no evidence grounding, no
-  disclosure cross-check, and no operator-facing decision layer.
-  This system replaces the single call with a four-stage pipeline,
-  schematizes the artifacts so claims cannot be made without
-  evidence, adds the disclosure-gap analysis the operator actually
-  needs at intake, and ships a deterministic decision rule on top.
+## Repository structure
+
+```text
+app.py                 Streamlit app (UI + flow)
+DESIGN.md              Design system documentation
+
+pipeline/
+    extraction.py      Stage 1 — structured extraction + Pydantic schemas
+    interview.py       Stage 2 — deterministic guided interview
+    synthesis.py       Stage 3 — care plan / CARE factors / gaps / decision
+    baseline.py        Single-call prompt-only baseline
+    documents.py       Admission Action Plan markdown + PDF
+
+data/
+    trees/             diabetes.json, dementia.json, fall_risk.json
+    dshs_rules.json    12 curated Washington CARE-related factors
+    test_cases/        8 synthetic resident cases (inputs + ground truth)
+
+evals/
+    run_evals.py       Full-pipeline vs baseline harness
+    results/           Machine-readable scores + comparison table
+```
+
+---
+
+## Scope and limitations
+
+- **Geography:** Washington State only — WAC citations, specialty
+  contracts, CARE classification, and disclosure assumptions are
+  Washington-specific.
+- **Conditions modeled:** diabetes, dementia, fall risk. Not yet modeled:
+  COPD/oxygen, dialysis, mental-health behavioral support, developmental
+  disabilities.
+- **CARE catalog:** 12 curated factors; not every CARE pathway.
+- **Data:** 8 synthetic cases; no real residents, no PII committed
+  (`.env` and data exclusions are git-ignored).
+- **Decision support only:** all final clinical, billing, legal, and
+  admission decisions remain with the human care team.
+
+## Future work
+
+OCR for scanned PDFs; persistent resident workspaces; more modeled
+conditions; multi-resident intake queue; export to official AFH
+templates; tighter WAC-criterion mapping to reduce over-recommendation.
