@@ -2673,11 +2673,11 @@ def _render_evidence_unified(
                 if st.button(
                     sid,
                     key=f"ev_chip_{ctx}_{_i}_{sid}",
-                    help="Open Sources & Debug filtered to this snippet",
+                    help="Pin this snippet at the top of the "
+                    "Evidence Map tab",
                     use_container_width=True,
                 ):
                     st.session_state["evidence_filter_snippet_id"] = sid
-                    st.session_state["focus_sources_tab"] = True
                     st.rerun()
             with body_col:
                 if snip.source == "operator":
@@ -3059,8 +3059,9 @@ def _render_evidence_provenance_map(
             "unreferenced · grouped by source and artifact references**"
         )
         st.caption(
-            "S = discharge/source document · F = family note · "
-            "OP = operator interview answer · gap_XX = risk register item"
+            "S = clinical record · F = family note · "
+            "OP = operator interview answer · gap_XX = capability-gap "
+            "register item"
         )
 
         st.divider()
@@ -4069,10 +4070,6 @@ elif stage == "synthesis_done":
             for _k in list(st.session_state.keys()):
                 del st.session_state[_k]
             st.rerun()
-    # Focus hints proved confusing because Streamlit cannot switch
-    # tabs programmatically — drop the stale signal.
-    st.session_state.pop("focus_action_plan", None)
-    st.session_state.pop("focus_sources_tab", None)
 
     artifacts = st.session_state.artifacts
     profile = st.session_state.profile
@@ -4804,6 +4801,40 @@ elif stage == "synthesis_done":
     # Evidence Map — full provenance/audit view, promoted to its own
     # top-level tab.
     with tab_evidence:
+        _pinned = st.session_state.get("evidence_filter_snippet_id")
+        if _pinned:
+            _by_id = {
+                s.snippet_id: s for s in profile.evidence_snippets
+            }
+            _ps = _by_id.get(_pinned)
+            with st.container(border=True):
+                pin_l, pin_r = st.columns([5, 1])
+                with pin_l:
+                    if _ps is None:
+                        st.markdown(
+                            f"**Pinned snippet `{_pinned}`** — not "
+                            "found in the current profile."
+                        )
+                    else:
+                        if _ps.source == "operator":
+                            _txt = _humanize_operator_claim(_ps.claim)
+                        else:
+                            _txt = _ps.verbatim_text
+                        st.markdown(
+                            f"**Pinned `{_ps.snippet_id}` · "
+                            f"{_SOURCE_LABELS.get(_ps.source, _ps.source)}"
+                            f"**  \n{html_escape(_txt)}"
+                        )
+                with pin_r:
+                    if st.button(
+                        "Clear pin",
+                        key="clear_evidence_pin",
+                        use_container_width=True,
+                    ):
+                        del st.session_state[
+                            "evidence_filter_snippet_id"
+                        ]
+                        st.rerun()
         _render_evidence_provenance_map(combined_for_map, profile)
 
     # Sources & Debug — structured profile + developer telemetry.

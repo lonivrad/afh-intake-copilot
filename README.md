@@ -327,11 +327,11 @@ cp .env.example .env
 
 ### Run it on one example
 
-Pull the inputs from a bundled synthetic case and paste them into the UI:
+Pull the inputs from a bundled synthetic case and paste them into the UI
+(uses Python — already installed, no extra tooling required):
 
 ```bash
-cat data/test_cases/case_04.json | jq -r '.inputs.discharge_summary'
-cat data/test_cases/case_04.json | jq -r '.inputs.family_notes'
+./venv/bin/python -c "import json;d=json.load(open('data/test_cases/case_04.json'))['inputs'];print('--- CLINICAL RECORD ---\n'+d['discharge_summary']+'\n\n--- FAMILY NOTES ---\n'+d['family_notes'])"
 ```
 
 Then: Start intake → confirm the extracted profile → complete the guided
