@@ -2511,7 +2511,10 @@ def _humanize_operator_claim(claim: str) -> str:
         return mapped
     if node_id in _OPERATOR_PREFIX_MAP:
         return _OPERATOR_PREFIX_MAP[node_id]
-    return val or claim
+    # Fall back to the shared option humanizer so booleans read
+    # "Yes"/"No" and enum values are title-cased, never raw "True"
+    # or snake_case.
+    return _humanize_option_value(val) if val else claim
 
 
 def _parse_mismatch(verbatim: str, raw_value: str, humanized: str) -> bool:
@@ -2520,6 +2523,11 @@ def _parse_mismatch(verbatim: str, raw_value: str, humanized: str) -> bool:
     parse may have collapsed or reshaped the answer."""
     v = (verbatim or "").lower()
     if not v:
+        return False
+    # Boolean answers are parsed deterministically (yes/no → True/
+    # False) — never flag them for confirmation; that produced
+    # nonsense like 'you said "yes" · recorded: True'.
+    if (raw_value or "").strip() in ("True", "False"):
         return False
     candidates = [
         (raw_value or "").replace("_", " ").lower(),
@@ -2634,10 +2642,9 @@ def _render_evidence_unified(
                             snip.verbatim_text, raw_value, display
                         ):
                             st.warning(
-                                f"Needs confirmation — Operator said: "
-                                f"{snip.verbatim_text}  ·  System "
-                                f"recorded: "
-                                f"{raw_value.replace('_', ' ')}"
+                                "Needs confirmation — you answered "
+                                f"“{snip.verbatim_text}”, "
+                                f"recorded as “{display}”."
                             )
                 elif snip.source == "discharge":
                     st.markdown(
