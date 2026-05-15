@@ -2310,6 +2310,38 @@ def _decorate_severity_tokens(md: str) -> str:
     )
 
 
+def _render_doc_section(body: str) -> None:
+    """Render one document-preview block. List-style sections keep
+    markdown + colored severity dots. Prose-style sections (e.g.
+    "1. Admission Recommendation") are reflowed to a comfortable
+    reading measure with paragraph rhythm and preserved bold —
+    scoped via inline styles so nothing leaks into task cards."""
+    body = (body or "").strip()
+    if not body:
+        return
+    if re.search(r"(?m)^\s*[-*+]\s+", body):
+        st.markdown(
+            _decorate_severity_tokens(body), unsafe_allow_html=True
+        )
+        return
+    blocks = []
+    for para in re.split(r"\n\s*\n", body):
+        para = para.strip()
+        if not para:
+            continue
+        txt = html_escape(para.replace("\n", " "))
+        txt = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", txt)
+        txt = _decorate_severity_tokens(txt)
+        blocks.append(f"<p style='margin:0 0 14px 0;'>{txt}</p>")
+    st.markdown(
+        "<div style='max-width:72ch; font-size:15px; "
+        "line-height:1.8; color:var(--text-secondary);'>"
+        + "".join(blocks)
+        + "</div>",
+        unsafe_allow_html=True,
+    )
+
+
 def _parse_action_plan_sections(md: str) -> tuple[str, list[tuple[str, str]]]:
     """Split the generated Draft Admission Action Plan markdown into an
     intro block (everything before the first '## ' header) and a list of
@@ -4415,19 +4447,12 @@ elif stage == "synthesis_done":
                     )
                     st.rerun()
                 if intro_md:
-                    st.markdown(
-                        _decorate_severity_tokens(intro_md),
-                        unsafe_allow_html=True,
-                    )
+                    _render_doc_section(intro_md)
                 for section_title, section_body in sections:
                     with st.expander(
                         section_title, expanded=_expand_doc
                     ):
-                        if section_body:
-                            st.markdown(
-                                _decorate_severity_tokens(section_body),
-                                unsafe_allow_html=True,
-                            )
+                        _render_doc_section(section_body)
 
             st.divider()
             st.caption(
