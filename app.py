@@ -4040,14 +4040,6 @@ elif stage == "synthesis_done":
         else:
             accent_color, accent_icon = "#15803d", "✓"
 
-        # Owner pending list — used by the hero blocking-owners block.
-        owner_pending: list[tuple[str, int]] = []
-        for owner, tasks in global_action_tasks.items():
-            pending = sum(1 for t in tasks if not _is_task_done(t))
-            if pending > 0:
-                owner_pending.append((owner, pending))
-        owner_pending.sort(key=lambda x: -x[1])
-
         # Provenance inputs — needed by the Evidence Map tab and
         # by the status block now rendered in the Action Plan tab.
         combined_for_map = {
@@ -4152,24 +4144,29 @@ elif stage == "synthesis_done":
                     unsafe_allow_html=True,
                 )
 
-                # Big count — switches to "All clear" when none.
+                # Count + label on one baseline-aligned row.
                 if global_high_rem > 0:
                     st.markdown(
-                        f"<div class='hero-blocker-num'>{global_high_rem}"
-                        f"</div>"
-                        f"<div class='hero-blocker-label'>"
-                        f"concern{'' if global_high_rem == 1 else 's'} "
-                        f"to address"
-                        f"</div>",
+                        "<div style='display:flex; align-items:baseline;"
+                        " gap:10px; margin:6px 0 0 0;'>"
+                        f"<span class='hero-blocker-num' "
+                        f"style='margin:0;'>{global_high_rem}</span>"
+                        "<span class='hero-blocker-label' "
+                        "style='margin:0;'>concern"
+                        f"{'' if global_high_rem == 1 else 's'} "
+                        "to address</span></div>",
                         unsafe_allow_html=True,
                     )
                 else:
                     st.markdown(
-                        "<div class='hero-blocker-num' "
-                        "style='font-size:36px; color:#15803d;'>"
-                        "All clear</div>"
-                        "<div class='hero-blocker-label'>"
-                        "No concerns to address.</div>",
+                        "<div style='display:flex; align-items:baseline;"
+                        " gap:10px; margin:6px 0 0 0;'>"
+                        "<span class='hero-blocker-num' "
+                        "style='margin:0; font-size:36px; "
+                        "color:#15803d;'>All clear</span>"
+                        "<span class='hero-blocker-label' "
+                        "style='margin:0;'>no concerns to address"
+                        "</span></div>",
                         unsafe_allow_html=True,
                     )
 
@@ -4203,28 +4200,6 @@ elif stage == "synthesis_done":
                             f"{cond_total} conditions complete</div>",
                             unsafe_allow_html=True,
                         )
-
-                # Owners to contact — clickable cards filter Action Plan.
-                if owner_pending:
-                    st.markdown(
-                        "<div class='hero-section-label'>"
-                        "Who to contact first</div>",
-                        unsafe_allow_html=True,
-                    )
-                    owner_cols = st.columns(min(len(owner_pending), 4))
-                    for i, (owner, n) in enumerate(owner_pending[:4]):
-                        col = owner_cols[i % len(owner_cols)]
-                        display_owner = _owner_display(owner)
-                        btn_label = f"{display_owner}  ·  {n}"
-                        if col.button(
-                            btn_label,
-                            key=f"hero_owner_{owner}",
-                            use_container_width=True,
-                        ):
-                            st.session_state[
-                                "action_plan_owner_filter"
-                            ] = owner
-                            st.rerun()
 
                 # Why this verdict — collapsed by default.
                 if rationale_full:
