@@ -2865,11 +2865,14 @@ def find_snippet_references(snippet_id: str, artifacts: dict) -> list[str]:
     return refs
 
 
-def _preview_text(text: str, n: int = 70) -> str:
-    """Collapse whitespace and truncate to n chars with an ellipsis suffix
-    if longer. Used for the Evidence Provenance Map expander labels."""
-    cleaned = " ".join(text.split())
-    return cleaned if len(cleaned) <= n else cleaned[:n] + "..."
+def _preview_text(text: str, n: int = 90) -> str:
+    """Collapse whitespace and truncate at a word boundary (never
+    mid-word) with a single ellipsis. Used for Evidence Map row
+    labels."""
+    cleaned = " ".join((text or "").split())
+    if len(cleaned) <= n:
+        return cleaned
+    return cleaned[:n].rsplit(" ", 1)[0].rstrip(" ,;:") + "…"
 
 
 _SOURCE_LABELS = {
@@ -2882,18 +2885,21 @@ _SOURCE_LABELS = {
 def _evidence_label(
     snippet, n_refs: int, is_high_gap: bool
 ) -> str:
-    """Build the compact-row label for one evidence snippet."""
+    """Readable one-line label for an Evidence Map row: content
+    first (what the snippet says), with the source, ID, and citation
+    count as a quiet tail. A leading marker flags high-severity ties."""
     src_label = _SOURCE_LABELS.get(snippet.source, snippet.source)
     preview = _preview_text(snippet.verbatim_text)
-    if snippet.source == "operator":
-        middle = f"{src_label} → {preview}"
-    else:
-        middle = f"{src_label} · {preview}"
-    ref_suffix = f"{n_refs} ref{'' if n_refs == 1 else 's'}"
-    label = f"{snippet.snippet_id} · {middle} · {ref_suffix}"
-    if is_high_gap:
-        label += " · linked to a high-severity gap"
-    return label
+    ref_suffix = (
+        "not yet cited"
+        if n_refs == 0
+        else f"cited {n_refs}×"
+    )
+    flag = "⚠  " if is_high_gap else ""
+    return (
+        f"{flag}{src_label} — {preview}"
+        f"   ·   {snippet.snippet_id} · {ref_suffix}"
+    )
 
 
 def _render_snippet_row(snippet, refs: list[str], is_high_gap: bool) -> None:
