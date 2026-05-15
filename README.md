@@ -269,31 +269,58 @@ and the rationale/evidence is always inspectable.
 
 ## 4. Artifact snapshot
 
-The app is a runnable Streamlit application. A full walkthrough on one
-example (no live system required at review time):
+A runnable Streamlit app. The screens below walk one synthetic
+resident (moderate Alzheimer's dementia + fall risk) end to end — no
+live system required at review time.
 
-1. **Inputs** — paste a clinical record + family notes (disclosure
-   recommended). Required-field gating; weak-PDF-extraction warning.
-2. **Confirm what we extracted** — Stage-1 structured profile snapshot
-   (diabetes / insulin / falls / dementia / ADL fields).
-3. **Interview** — condition-specific questions as buttons / booleans /
-   numeric / checkbox multi-selects, with **← Back**, **Ask later**, a
-   numbered-step workflow indicator, and a live "Captured so far"
-   sidebar.
-4. **Ready to generate** — counts of operator answers, conditions,
-   disagreements, and open unknowns.
-5. **Results** — verdict status block (concern count, readiness bar, who
-   to contact first), then the tabbed detail described in §2.
-6. **Download** — Admission Action Plan PDF; per-tab evidence is
-   inspectable and clickable into the Evidence Map.
+**1 · Inputs.** Paste the clinical record, family notes, and (recommended)
+the AFH disclosure. Required-field gating and a weak-PDF-extraction
+warning. A numbered workflow stepper runs across the top throughout.
 
-Sample inputs/outputs live in `data/test_cases/` (inputs) and
-`evals/results/` (machine-readable outputs and the comparison table).
-Optional screenshots can be dropped in `docs/screenshots/`
-(e.g. `results.png`, `action-plan.png`, `care-plan.png`,
-`care-factors.png`, `capability-gaps.png`, `evidence-map.png`,
-`interview.png`); the README, eval results, and walkthrough stand on
-their own without them.
+![Inputs screen](docs/screenshots/inputs.png)
+
+**2 · Guided interview.** Condition-specific questions (buttons /
+booleans / numeric / checkbox multi-selects), a serif prompt, **← Back**
+and **Ask later**, and a live "Captured so far" sidebar showing the last
+operator answers.
+
+![Guided interview](docs/screenshots/interview.png)
+
+**3 · Ready to generate.** After the interview, a summary of operator
+answers, triggered conditions, source disagreements, and open unknowns,
+then the staged synthesis runs (note the descriptive progress copy).
+
+![Ready to generate](docs/screenshots/ready-to-generate.png)
+
+**4 · Results → Action Plan.** The verdict status block (⚠ HOLD FOR
+REVIEW · *6 concerns to address* · admission-readiness bar · collapsed
+"Why this verdict?" and "Audit & Methodology"), then the owner-grouped
+move-in worklist. Tabs across the top hold the rest of the package.
+
+![Results and Action Plan](docs/screenshots/results-action-plan.png)
+
+**5 · Evidence Map.** Every claim traces to a verbatim source quote.
+Filterable by source and by where it is cited; snippets linked to a
+high-severity gap are flagged. This is the audit backbone of the
+evidence-grounding design.
+
+![Evidence Map](docs/screenshots/evidence-map.png)
+
+**Sample output.** The downloadable Draft Admission Action Plan
+(7-page PDF generated for this case):
+[`docs/screenshots/admission-action-plan-sample.pdf`](docs/screenshots/admission-action-plan-sample.pdf).
+
+**More views:** the remaining tabs are captured under
+[`docs/screenshots/`](docs/screenshots/) —
+[Care Plan](docs/screenshots/care-plan.png),
+[Capability Gaps](docs/screenshots/capability-gaps.png),
+[CARE Factors](docs/screenshots/care-factors.png),
+[Family Communication](docs/screenshots/family-communication.png),
+[Sources & Debug](docs/screenshots/sources-debug.png).
+
+Machine-readable sample inputs/outputs also live in
+`data/test_cases/` (inputs + ground truth) and `evals/results/`
+(scores + comparison table).
 
 ---
 
