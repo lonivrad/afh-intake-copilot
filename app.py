@@ -2652,7 +2652,14 @@ def _render_evidence_unified(
             "to inspect it.</div>",
             unsafe_allow_html=True,
         )
-        for sid in snippet_ids:
+        # De-duplicate while preserving order — a gap/care item can
+        # cite the same snippet more than once.
+        seen_ids: set[str] = set()
+        unique_ids = [
+            s for s in snippet_ids
+            if not (s in seen_ids or seen_ids.add(s))
+        ]
+        for _i, sid in enumerate(unique_ids):
             snip = by_id.get(sid)
             if snip is None:
                 st.markdown(f"- `{sid}` — _(not in current profile)_")
@@ -2665,7 +2672,7 @@ def _render_evidence_unified(
             with chip_col:
                 if st.button(
                     sid,
-                    key=f"ev_chip_{ctx}_{sid}",
+                    key=f"ev_chip_{ctx}_{_i}_{sid}",
                     help="Open Sources & Debug filtered to this snippet",
                     use_container_width=True,
                 ):
@@ -4154,8 +4161,6 @@ elif stage == "synthesis_done":
                 owner_pending.append((owner, pending))
         owner_pending.sort(key=lambda x: -x[1])
 
-        acked = st.session_state.get("verdict_acknowledged_at")
-
         # ----- Hero Status Block -----
         with st.container(border=True):
             # Verdict label — color reflects severity.
@@ -4242,33 +4247,7 @@ elif stage == "synthesis_done":
                         st.session_state[
                             "action_plan_owner_filter"
                         ] = owner
-                        if not acked:
-                            st.session_state[
-                                "verdict_acknowledged_at"
-                            ] = datetime.now().strftime("%H:%M")
                         st.rerun()
-
-            # Acknowledge / acknowledged ribbon.
-            if not acked:
-                ack_l, _ = st.columns([2, 3])
-                with ack_l:
-                    if st.button(
-                        "Acknowledge & start resolving",
-                        type="primary",
-                        key="verdict_ack_button",
-                        use_container_width=True,
-                    ):
-                        st.session_state["verdict_acknowledged_at"] = (
-                            datetime.now().strftime("%H:%M")
-                        )
-                        st.rerun()
-            else:
-                st.markdown(
-                    f"<div style='font-size:12px; color:#15803d; "
-                    f"font-weight:600; margin-top:8px;'>"
-                    f"✓ Acknowledged at {acked}</div>",
-                    unsafe_allow_html=True,
-                )
 
             # Why this verdict — collapsed by default.
             if rationale_full:
@@ -4570,7 +4549,7 @@ elif stage == "synthesis_done":
                 st.error("PDF unavailable.")
 
             with st.expander(
-                "Preview generated document", expanded=False
+                "Preview Admission Action Plan", expanded=False
             ):
                 intro_md, sections = _parse_action_plan_sections(
                     st.session_state.draft_action_plan
