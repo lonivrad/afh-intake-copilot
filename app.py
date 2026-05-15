@@ -514,10 +514,10 @@ st.markdown(
         text-transform: uppercase;
         letter-spacing: 0.08em;
         color: var(--text-muted);
-        margin: 20px 0 10px 0;
+        margin: 24px 0 16px 0;
     }
     .ws-subgroup:first-child {
-        margin-top: 6px;
+        margin-top: 8px;
     }
 
     /* ============================================================
@@ -665,20 +665,16 @@ st.markdown(
         padding-bottom: 12px !important;
         line-height: 1.5 !important;
     }
-    /* Generated-document preview: pull the leading title up tight
-       under the expander and shrink the Expand-all control so there
-       isn't a big empty band between the two. */
+    /* Generated-document preview only: keep the leading "Draft
+       Admission Action Plan" h1 tight under the expander and shrink
+       the Expand-all control. Scoped to the h1 (only the preview
+       renders a markdown h1) and to the keyed Expand-all button, so
+       this does NOT touch Action Plan task cards or other expanders. */
     div[data-testid="stExpanderDetails"]
       [data-testid="stMarkdownContainer"] h1 {
         font-size: 22px !important;
         margin: 0 0 6px 0 !important;
         line-height: 1.2 !important;
-    }
-    /* Tighten the stacked-element gap inside the preview so the
-       Expand-all button and the document title sit close. */
-    div[data-testid="stExpanderDetails"]
-      div[data-testid="stVerticalBlock"] {
-        gap: 0.35rem !important;
     }
     div[class*="st-key-expand_all_doc_toggle"] {
         margin: -6px 0 -8px 0 !important;
@@ -687,41 +683,6 @@ st.markdown(
         padding: 2px 12px !important;
         min-height: 26px !important;
         font-size: 12px !important;
-    }
-    /* More breathing room between bullet points in dense document
-       sections so a long list isn't overwhelming to scan. */
-    div[data-testid="stExpanderDetails"]
-      [data-testid="stMarkdownContainer"] li {
-        margin-bottom: 9px !important;
-        line-height: 1.65 !important;
-    }
-    div[data-testid="stExpanderDetails"]
-      [data-testid="stMarkdownContainer"] ul,
-    div[data-testid="stExpanderDetails"]
-      [data-testid="stMarkdownContainer"] ol {
-        margin-bottom: 12px !important;
-    }
-    /* Readable prose for the document preview sections (e.g.
-       "1. Admission recommendation"): comfortable measure, line
-       height, and paragraph rhythm so it isn't a wall of text. */
-    div[data-testid="stExpanderDetails"]
-      [data-testid="stMarkdownContainer"] p {
-        font-size: 15px !important;
-        line-height: 1.75 !important;
-        margin: 0 0 12px 0 !important;
-        max-width: 68ch;
-    }
-    div[data-testid="stExpanderDetails"]
-      [data-testid="stMarkdownContainer"] h2,
-    div[data-testid="stExpanderDetails"]
-      [data-testid="stMarkdownContainer"] h3 {
-        font-size: 15px !important;
-        font-weight: 700 !important;
-        margin: 16px 0 6px 0 !important;
-    }
-    div[data-testid="stExpanderDetails"]
-      [data-testid="stMarkdownContainer"] strong {
-        font-weight: 700;
     }
 
     /* ============================================================
