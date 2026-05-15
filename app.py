@@ -1210,22 +1210,6 @@ _CARE_SECTION_LABELS = [
 ]
 
 
-def _care_plan_summary(care_plan: dict) -> str:
-    total = sum(
-        len(care_plan.get(k, [])) for k, _ in _CARE_SECTION_LABELS
-    )
-    present = [
-        label for k, label in _CARE_SECTION_LABELS if care_plan.get(k)
-    ]
-    if not present:
-        return f"Care Plan Summary: {total} care items."
-    return (
-        f"Care Plan Summary: {total} care items across "
-        f"{', '.join(present)} — all grounded in "
-        "discharge/family/operator evidence."
-    )
-
-
 # ===== Care Plan tab — clinical artifact view =====
 
 
@@ -1423,27 +1407,6 @@ def _render_care_plan_metadata(
     )
 
 
-def _humanize_evidence_line(snippet) -> tuple[str, str | None]:
-    """Return (main_line_md, optional_context_caption_or_None) for
-    one evidence snippet."""
-    vt = snippet.verbatim_text or ""
-    claim = snippet.claim or ""
-    if snippet.source == "operator":
-        # Skip the internal "operator answer at NODE -> 'value'" claim;
-        # it isn't human-readable. Otherwise pass claim through as
-        # context.
-        is_raw_claim = bool(
-            re.match(r"^operator answer at\b", claim.lower())
-        )
-        context = None if is_raw_claim or claim == vt else claim or None
-        return f"- **Operator answered:** {vt}", context
-    if snippet.source == "discharge":
-        return f"- **Clinical record:** {vt}", None
-    if snippet.source == "family":
-        return f"- **Family:** {vt}", None
-    return f"- `{snippet.snippet_id}` · {vt}", None
-
-
 def _render_humanized_evidence(
     profile: ResidentProfile, snippet_ids: list[str], context_key: str | None = None,
 ) -> None:
@@ -1610,27 +1573,6 @@ def _acuity_summary(acuity_recs: dict) -> str:
         f"Acuity Summary: {total} CARE factor{plural} recommended: "
         f"{items}{extra}."
     )
-
-
-def _risk_summary(risk_register: dict) -> str:
-    gaps = risk_register.get("gaps", [])
-    total = len(gaps)
-    if total == 0:
-        return "Risk Summary: 0 capability gaps."
-    sev_count = {"high": 0, "medium": 0, "low": 0}
-    for g in gaps:
-        s = g.get("severity")
-        if s in sev_count:
-            sev_count[s] += 1
-    parts = []
-    if sev_count["high"]:
-        parts.append(f"{sev_count['high']} high severity")
-    if sev_count["medium"]:
-        parts.append(f"{sev_count['medium']} medium")
-    if sev_count["low"]:
-        parts.append(f"{sev_count['low']} low")
-    breakdown = ", ".join(parts) if parts else "severity unspecified"
-    return f"Risk Summary: {total} capability gaps: {breakdown}."
 
 
 # ===== Summary-tab operator dashboard helpers =====
@@ -2283,29 +2225,6 @@ def _render_action_tasks_workstream(
                     _render_task_dispatch(task, include_priority=True)
 
 
-def _render_blocker_banner(high_remaining: int) -> None:
-    if high_remaining > 0:
-        st.markdown(
-            f"""
-            <div style="background:#991b1b; color:white; padding:16px 20px; border-radius:10px; margin:12px 0;">
-                <div style="font-weight:800; font-size:18px; letter-spacing:.04em;">ADMISSION ON HOLD</div>
-                <div style="font-size:14px; margin-top:6px;">{high_remaining} high-severity concern{'' if high_remaining == 1 else 's'} remain unresolved.</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-    else:
-        st.markdown(
-            """
-            <div style="background:#2d5f3f; color:white; padding:16px 20px; border-radius:10px; margin:12px 0;">
-                <div style="font-weight:800; font-size:18px; letter-spacing:.04em;">Concerns cleared</div>
-                <div style="font-size:14px; margin-top:6px;">No high-severity tasks remain unresolved.</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-
 def _render_add_custom_task() -> None:
     with st.expander("Add custom task", expanded=False):
         text = st.text_input(
@@ -2860,44 +2779,6 @@ def _render_acuity_recs(recs: dict, profile: ResidentProfile):
 
 
 _SEVERITY_ORDER = {"high": 0, "medium": 1, "low": 2}
-
-
-def render_decision_card(recommendation: str, rationale: str) -> None:
-    """Professional styled recommendation card. Inline-styled HTML so the
-    color signal carries even without the Streamlit theme (which already
-    matches; see .streamlit/config.toml)."""
-    if recommendation == "accept":
-        color, symbol, label = "#2d5f3f", "✓", "ACCEPT"
-    elif recommendation == "accept_with_conditions":
-        color, symbol, label = "#b45309", "!", "ACCEPT WITH CONDITIONS"
-    else:
-        color, symbol, label = "#991b1b", "!", "HOLD FOR REVIEW"
-    st.markdown(
-        f"""
-        <div style="background:{color}; color:white; padding:24px; border-radius:12px; margin-bottom:20px; box-shadow:0 2px 8px rgba(0,0,0,0.10);">
-            <div style="font-size:13px; font-weight:700; letter-spacing:1px; opacity:0.9;">{symbol} RECOMMENDATION</div>
-            <div style="font-size:28px; font-weight:800; margin:8px 0 14px 0;">{label}</div>
-            <div style="font-size:16px; line-height:1.6; opacity:0.96;">{rationale}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-def render_info_card(
-    title: str, body: str, accent: str = "#1e3a5f"
-) -> None:
-    """Small accented card with a small-caps title and a body line.
-    Inline-styled HTML so it carries even without theme overrides."""
-    st.markdown(
-        f"""
-        <div style="border-left: 5px solid {accent}; background: #ffffff; padding: 16px 18px; border-radius: 10px; margin: 12px 0 18px 0; box-shadow: 0 1px 4px rgba(0,0,0,0.06);">
-            <div style="font-size: 14px; font-weight: 800; color: {accent}; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px;">{title}</div>
-            <div style="font-size: 15px; line-height: 1.55; color: #374151;">{body}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
 
 
 def severity_badge(level: str) -> str:
@@ -4349,7 +4230,6 @@ elif stage == "synthesis_done":
                 if rationale_full:
                     with st.expander("Why this verdict?", expanded=False):
                         _render_prose(rationale_full)
-
 
 
             with st.expander("Audit & Methodology", expanded=False):
