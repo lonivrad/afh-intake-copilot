@@ -4129,9 +4129,8 @@ elif stage == "synthesis_done":
             for i, d in enumerate(unresolved_disagreements, 1):
                 _render_disagreement_card_narrative(i, d)
 
-        # 5. Open questions for follow-up — grouped under
-        # UI-inferred owner subheaders. Each group header carries an
-        # explicit "Suggested owner (UI-inferred)" qualifier.
+        # Open questions for follow-up — grouped under keyword-inferred
+        # owner subheaders.
         if len(open_questions) > 0:
             st.subheader("Open questions for follow-up")
             _render_open_questions_grouped(open_questions)
