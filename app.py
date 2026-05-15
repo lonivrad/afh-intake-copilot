@@ -1592,9 +1592,8 @@ def _infer_severity(text_or_field: str) -> tuple[str, str]:
 
 
 def _infer_owner(question_text: str) -> str:
-    """UI-only owner inference for open questions. Best-effort keyword
-    match against common roles. The user is reminded this is UI-inferred,
-    not artifact-authored."""
+    """UI-only owner inference for open questions — a best-effort
+    keyword match against common roles (not artifact-authored)."""
     lower = (question_text or "").lower()
     if any(
         k in lower
@@ -1723,9 +1722,7 @@ _OWNER_ORDER = [
 
 def _render_open_questions_grouped(open_questions: list[str]) -> None:
     """Group questions by inferred owner and render under small
-    subheaders. Owner labels carry an explicit 'Suggested owner
-    (UI-inferred)' qualifier so operators don't read it as authored
-    metadata."""
+    subheaders."""
     groups: dict[str, list[str]] = {}
     for q in open_questions:
         cleaned = re.sub(r"^\d+\.\s*", "", q).strip()
@@ -1736,12 +1733,9 @@ def _render_open_questions_grouped(open_questions: list[str]) -> None:
         if not items:
             continue
         st.markdown(
-            f"""
-            <div style="margin-top:14px; margin-bottom:4px;">
-              <span style="font-size:14px; font-weight:700; color:#1e3a5f;">{html_escape(owner)}</span>
-              <span style="font-size:11px; font-weight:500; color:#6b7280; margin-left:10px;">Suggested owner (UI-inferred)</span>
-            </div>
-            """,
+            "<div style='font-size:14px; font-weight:700; "
+            "color:var(--text-primary); margin:16px 0 6px 0;'>"
+            f"{html_escape(owner)}</div>",
             unsafe_allow_html=True,
         )
         for q in items:
@@ -1752,9 +1746,7 @@ def _render_open_questions_grouped(open_questions: list[str]) -> None:
 
 
 def _infer_worklist_owner(text: str) -> str:
-    """UI-only worklist-owner inference. Keyword fan-out matches the
-    Step 10.34 spec; labeled 'UI-inferred' wherever it appears in the
-    UI."""
+    """UI-only worklist-owner inference via keyword fan-out."""
     lower = (text or "").lower()
     if any(
         k in lower
