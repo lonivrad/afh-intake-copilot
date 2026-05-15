@@ -2203,10 +2203,17 @@ def _render_task_dispatch(
         _render_action_task(task, include_priority=include_priority)
 
 
+def _owner_display(owner: str) -> str:
+    """Operator-facing label for an owner bucket."""
+    if owner == "Needs Assignment":
+        return "Unassigned — needs an owner"
+    return owner
+
+
 def _owner_header(
     owner: str, tasks: list[dict], has_blocking: bool = False
 ) -> str:
-    return f"{owner} ({len(tasks)})"
+    return f"{_owner_display(owner)} ({len(tasks)})"
 
 
 def _render_open_questions_workstream(
@@ -2902,9 +2909,11 @@ def severity_badge(level: str) -> str:
     }
     bg, fg = colors.get(str(level).lower(), ("#6b7280", "white"))
     return (
-        f'<span style="background:{bg}; color:{fg}; padding:4px 10px; '
+        f'<span style="background:{bg}; color:{fg}; padding:4px 0; '
         f'border-radius:6px; font-size:12px; font-weight:700; '
-        f'text-transform:uppercase; margin-right:8px;">{level}</span>'
+        f'text-transform:uppercase; margin-right:8px; '
+        f'display:inline-block; min-width:78px; text-align:center; '
+        f'letter-spacing:0.04em;">{level}</span>'
     )
 
 
@@ -4324,11 +4333,7 @@ elif stage == "synthesis_done":
                     owner_cols = st.columns(min(len(owner_pending), 4))
                     for i, (owner, n) in enumerate(owner_pending[:4]):
                         col = owner_cols[i % len(owner_cols)]
-                        display_owner = (
-                            "Needs assignment"
-                            if owner == "Needs Assignment"
-                            else owner
-                        )
+                        display_owner = _owner_display(owner)
                         btn_label = f"{display_owner}  ·  {n}"
                         if col.button(
                             btn_label,
@@ -4449,22 +4454,14 @@ elif stage == "synthesis_done":
             open_qs = global_open_qs
             action_tasks = global_action_tasks
 
-            # Compact top strip: title + move-in date.
-            strip_l, strip_m = st.columns([3, 2])
-            with strip_l:
-                st.markdown(
-                    "<div style='font-size:22px; font-weight:700; "
-                    "color:#111827; margin-bottom:2px;'>Action Plan"
-                    "</div><div style='font-size:12px; color:#6b7280;'>"
-                    "Interactive move-in worklist.</div>",
-                    unsafe_allow_html=True,
-                )
-            with strip_m:
-                st.date_input(
-                    "Target move-in",
-                    value=st.session_state.get("target_move_in_date"),
-                    key="target_move_in_date",
-                )
+            st.markdown(
+                "<div class='t-headline' style='margin:0 0 2px 0;'>"
+                "Action Plan</div>"
+                "<div style='font-size:13px; color:var(--text-muted); "
+                "margin-bottom:10px;'>Interactive move-in worklist."
+                "</div>",
+                unsafe_allow_html=True,
+            )
 
             # Owner filter is integrated into the Action Tasks heading
             # below; no separate filter banner row.
@@ -4705,13 +4702,26 @@ elif stage == "synthesis_done":
                 )
 
         with st.expander("Regulatory context", expanded=False):
-            st.caption(
-                "CARE factors inform Washington CARE assessment and "
-                "rate-setting but do not independently determine "
-                "payment."
+            st.markdown(
+                "<div style='font-size:14px; font-weight:600; "
+                "color:var(--text-primary); margin-bottom:2px;'>"
+                "What these factors mean</div>"
+                "<div style='font-size:13px; color:var(--text-muted);'>"
+                "CARE factors inform the Washington CARE assessment and "
+                "rate-setting — they do not, on their own, determine "
+                "payment.</div>",
+                unsafe_allow_html=True,
             )
             if acuity.get("method_note"):
-                st.markdown(acuity["method_note"])
+                st.markdown(
+                    "<div style='border-top:1px solid "
+                    "var(--border-default); margin:12px 0;'></div>"
+                    "<div style='font-size:14px; font-weight:600; "
+                    "color:var(--text-primary); margin-bottom:6px;'>"
+                    "How these were derived</div>",
+                    unsafe_allow_html=True,
+                )
+                _render_prose(acuity["method_note"])
 
         all_gap_flagged = False
         if acuity_recs_list:
