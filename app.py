@@ -442,12 +442,12 @@ st.markdown(
     }
     .hero-blocker-label {
         font-family: var(--font-display);
-        font-size: 18px;
+        font-size: 24px;
         font-style: italic;
-        font-weight: 500;
-        color: var(--text-secondary);
+        font-weight: 700;
+        color: var(--text-primary);
         margin-top: 4px;
-        letter-spacing: 0.03em;
+        letter-spacing: 0.02em;
         word-spacing: 0.04em;
     }
     .hero-section-label {
@@ -462,6 +462,7 @@ st.markdown(
         font-size: 13px;
         color: var(--text-secondary);
         margin-top: 4px;
+        margin-bottom: 14px;
         font-feature-settings: "tnum";
     }
 
@@ -670,11 +671,17 @@ st.markdown(
     div[data-testid="stExpanderDetails"]
       [data-testid="stMarkdownContainer"] h1 {
         font-size: 22px !important;
-        margin: 4px 0 8px 0 !important;
-        line-height: 1.25 !important;
+        margin: 0 0 6px 0 !important;
+        line-height: 1.2 !important;
+    }
+    /* Tighten the stacked-element gap inside the preview so the
+       Expand-all button and the document title sit close. */
+    div[data-testid="stExpanderDetails"]
+      div[data-testid="stVerticalBlock"] {
+        gap: 0.35rem !important;
     }
     div[class*="st-key-expand_all_doc_toggle"] {
-        margin: -4px 0 2px 0 !important;
+        margin: -6px 0 -8px 0 !important;
     }
     div[class*="st-key-expand_all_doc_toggle"] button {
         padding: 2px 12px !important;
@@ -693,6 +700,28 @@ st.markdown(
     div[data-testid="stExpanderDetails"]
       [data-testid="stMarkdownContainer"] ol {
         margin-bottom: 12px !important;
+    }
+    /* Readable prose for the document preview sections (e.g.
+       "1. Admission recommendation"): comfortable measure, line
+       height, and paragraph rhythm so it isn't a wall of text. */
+    div[data-testid="stExpanderDetails"]
+      [data-testid="stMarkdownContainer"] p {
+        font-size: 15px !important;
+        line-height: 1.75 !important;
+        margin: 0 0 12px 0 !important;
+        max-width: 68ch;
+    }
+    div[data-testid="stExpanderDetails"]
+      [data-testid="stMarkdownContainer"] h2,
+    div[data-testid="stExpanderDetails"]
+      [data-testid="stMarkdownContainer"] h3 {
+        font-size: 15px !important;
+        font-weight: 700 !important;
+        margin: 16px 0 6px 0 !important;
+    }
+    div[data-testid="stExpanderDetails"]
+      [data-testid="stMarkdownContainer"] strong {
+        font-weight: 700;
     }
 
     /* ============================================================
@@ -2308,8 +2337,8 @@ def _decorate_severity_tokens(md: str) -> str:
         pretty = m.group(1).strip().title()
         return (
             f"<span title='{pretty}' style='display:inline-block;"
-            f"width:9px;height:9px;border-radius:50%;background:"
-            f"{color};vertical-align:middle;margin-right:7px;'></span>"
+            f"width:13px;height:13px;border-radius:50%;background:"
+            f"{color};vertical-align:middle;margin-right:9px;'></span>"
         )
 
     return re.sub(
