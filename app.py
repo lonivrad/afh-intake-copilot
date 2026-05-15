@@ -363,7 +363,7 @@ st.markdown(
         position: sticky;
         top: 0;
         z-index: 50;
-        background: var(--surface-1);
+        background: var(--surface-0);
         border-bottom: 1px solid var(--border-default);
         padding: 10px 0 !important;
         gap: 8px !important;
