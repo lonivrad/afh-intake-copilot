@@ -406,9 +406,9 @@ st.markdown(
     .hero-card {
         background: var(--surface-2);
         border: 1px solid var(--border-default);
-        border-radius: var(--radius-xl);
-        padding: var(--space-6) var(--space-8);
-        margin: var(--space-2) 0 var(--space-8) 0;
+        border-radius: var(--radius-lg);
+        padding: var(--space-4) var(--space-5);
+        margin: 0 0 var(--space-4) 0;
         box-shadow: var(--shadow-1);
         position: relative;
     }
@@ -416,7 +416,7 @@ st.markdown(
     .hero-card::before {
         content: "";
         position: absolute;
-        left: 0; top: 24px; bottom: 24px;
+        left: 0; top: 16px; bottom: 16px;
         width: 2px;
         background: var(--accent-600);
     }
@@ -431,24 +431,24 @@ st.markdown(
     }
     .hero-blocker-num {
         font-family: var(--font-display);
-        font-size: 84px;
+        font-size: 52px;
         font-weight: 500;
         line-height: 1.0;
         color: var(--text-primary);
-        margin: 12px 0 0 0;
-        letter-spacing: -0.04em;
+        margin: 6px 0 0 0;
+        letter-spacing: -0.03em;
         font-feature-settings: "tnum", "lnum";
         font-variation-settings: "opsz" 144;
     }
     .hero-blocker-label {
         font-family: var(--font-display);
-        font-size: 24px;
+        font-size: 18px;
         font-style: italic;
         font-weight: 500;
         color: var(--text-secondary);
-        margin-top: 8px;
-        letter-spacing: 0.04em;
-        word-spacing: 0.06em;
+        margin-top: 4px;
+        letter-spacing: 0.03em;
+        word-spacing: 0.04em;
     }
     .hero-section-label {
         font-size: var(--type-overline);
@@ -456,12 +456,12 @@ st.markdown(
         color: var(--text-muted);
         letter-spacing: 0.12em;
         text-transform: uppercase;
-        margin: 24px 0 8px 0;
+        margin: 14px 0 6px 0;
     }
     .hero-progress-text {
         font-size: 13px;
         color: var(--text-secondary);
-        margin-top: 6px;
+        margin-top: 4px;
         font-feature-settings: "tnum";
     }
 
@@ -4158,101 +4158,8 @@ elif stage == "synthesis_done":
                 owner_pending.append((owner, pending))
         owner_pending.sort(key=lambda x: -x[1])
 
-        # ----- Hero Status Block -----
-        with st.container(border=True):
-            # Verdict label — color reflects severity.
-            st.markdown(
-                f"<div class='hero-verdict' "
-                f"style='color:{accent_color};'>"
-                f"{accent_icon} {v_label}</div>",
-                unsafe_allow_html=True,
-            )
-
-            # Big count — switches to "All clear" when none.
-            if global_high_rem > 0:
-                st.markdown(
-                    f"<div class='hero-blocker-num'>{global_high_rem}"
-                    f"</div>"
-                    f"<div class='hero-blocker-label'>"
-                    f"concern{'' if global_high_rem == 1 else 's'} "
-                    f"to address"
-                    f"</div>",
-                    unsafe_allow_html=True,
-                )
-            else:
-                st.markdown(
-                    "<div class='hero-blocker-num' "
-                    "style='font-size:36px; color:#15803d;'>"
-                    "All clear</div>"
-                    "<div class='hero-blocker-label'>"
-                    "No concerns to address.</div>",
-                    unsafe_allow_html=True,
-                )
-
-            # Admission readiness section.
-            if global_total_tasks > 0:
-                st.markdown(
-                    "<div class='hero-section-label'>"
-                    "Admission readiness</div>",
-                    unsafe_allow_html=True,
-                )
-                st.progress(global_completed / global_total_tasks)
-                st.markdown(
-                    f"<div class='hero-progress-text'>"
-                    f"{global_completed} of {global_total_tasks} "
-                    f"tasks complete</div>",
-                    unsafe_allow_html=True,
-                )
-            else:
-                cond_total = len(
-                    decision.get("conditions_before_admission") or []
-                )
-                if cond_total > 0:
-                    st.markdown(
-                        "<div class='hero-section-label'>"
-                        "Admission readiness</div>",
-                        unsafe_allow_html=True,
-                    )
-                    st.progress(0.0)
-                    st.markdown(
-                        f"<div class='hero-progress-text'>0 of "
-                        f"{cond_total} conditions complete</div>",
-                        unsafe_allow_html=True,
-                    )
-
-            # Owners to contact — clickable cards filter Action Plan.
-            if owner_pending:
-                st.markdown(
-                    "<div class='hero-section-label'>"
-                    "Who to contact first</div>",
-                    unsafe_allow_html=True,
-                )
-                owner_cols = st.columns(min(len(owner_pending), 4))
-                for i, (owner, n) in enumerate(owner_pending[:4]):
-                    col = owner_cols[i % len(owner_cols)]
-                    display_owner = (
-                        "Needs assignment"
-                        if owner == "Needs Assignment"
-                        else owner
-                    )
-                    btn_label = f"{display_owner}  ·  {n}"
-                    if col.button(
-                        btn_label,
-                        key=f"hero_owner_{owner}",
-                        use_container_width=True,
-                    ):
-                        st.session_state[
-                            "action_plan_owner_filter"
-                        ] = owner
-                        st.rerun()
-
-            # Why this verdict — collapsed by default.
-            if rationale_full:
-                with st.expander("Why this verdict?", expanded=False):
-                    _render_prose(rationale_full)
-
-
-        # Audit metadata moved out of the primary workflow zone.
+        # Provenance inputs — needed by the Evidence Map tab and
+        # by the status block now rendered in the Action Plan tab.
         combined_for_map = {
             **artifacts,
             "intake_decision": decision,
@@ -4265,62 +4172,6 @@ elif stage == "synthesis_done":
                 s.snippet_id, combined_for_map
             )
         )
-        with st.expander("Audit & Methodology", expanded=False):
-            st.markdown(
-                f"<div style='font-size:14px; font-weight:600; "
-                f"color:var(--text-primary);'>Evidence base: "
-                f"{len(all_snips)} snippets · {unref_count} "
-                f"unreferenced</div>"
-                "<div style='font-size:12px; color:var(--text-muted); "
-                "margin-top:2px;'>Full provenance map and per-snippet "
-                "audit trail live in the Sources &amp; Debug tab.</div>"
-                "<div style='border-top:1px solid var(--border-default); "
-                "margin:12px 0;'></div>"
-                "<div style='font-size:14px; font-weight:600; "
-                "color:var(--text-primary);'>Methodology comparison</div>"
-                "<div style='font-size:12px; color:var(--text-muted); "
-                "margin-top:2px;'>For evaluation only: compares the "
-                "staged pipeline against a one-shot baseline.</div>",
-                unsafe_allow_html=True,
-            )
-            if not compare_baseline:
-                st.caption(
-                    "Enable 'Compare against baseline' in the sidebar "
-                    "to activate side-by-side rendering."
-                )
-            if (
-                compare_baseline
-                and st.session_state.baseline_output is None
-            ):
-                if st.button(
-                    "Run baseline single-call for comparison",
-                    key="run_baseline_button",
-                ):
-                    try:
-                        with st.spinner("Running baseline single-call..."):
-                            dshs_rules = _load_dshs_rules()
-                            st.session_state.baseline_output = run_baseline(
-                                discharge_summary=st.session_state.source_docs[
-                                    "discharge_summary"
-                                ],
-                                family_notes=st.session_state.source_docs[
-                                    "family_notes"
-                                ],
-                                disclosure_text=st.session_state.disclosure_text,
-                                dshs_rules=dshs_rules,
-                            )
-                    except Exception as exc:
-                        st.error(
-                            "Baseline run failed. Try again or proceed "
-                            "without comparison."
-                        )
-                        st.caption(f"Details: {exc}")
-                    else:
-                        st.rerun()
-            elif compare_baseline and st.session_state.baseline_output is not None:
-                st.caption(
-                    "Baseline already loaded. See per-tab comparisons."
-                )
     else:
         global_open_qs, global_action_tasks = ({}, {})
         global_high_rem = 0
@@ -4396,6 +4247,163 @@ elif stage == "synthesis_done":
     # st.rerun() after state transitions so the rendered surface
     # matches the new state immediately.
     with tab_action:
+        # Status block — verdict, concern count, readiness, who
+        # to contact, and the audit/methodology — lives at the
+        # top of the Action Plan tab instead of as a banner over
+        # every tab.
+        if decision is not None:
+            # ----- Hero Status Block -----
+            with st.container(border=True):
+                # Verdict label — color reflects severity.
+                st.markdown(
+                    f"<div class='hero-verdict' "
+                    f"style='color:{accent_color};'>"
+                    f"{accent_icon} {v_label}</div>",
+                    unsafe_allow_html=True,
+                )
+
+                # Big count — switches to "All clear" when none.
+                if global_high_rem > 0:
+                    st.markdown(
+                        f"<div class='hero-blocker-num'>{global_high_rem}"
+                        f"</div>"
+                        f"<div class='hero-blocker-label'>"
+                        f"concern{'' if global_high_rem == 1 else 's'} "
+                        f"to address"
+                        f"</div>",
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    st.markdown(
+                        "<div class='hero-blocker-num' "
+                        "style='font-size:36px; color:#15803d;'>"
+                        "All clear</div>"
+                        "<div class='hero-blocker-label'>"
+                        "No concerns to address.</div>",
+                        unsafe_allow_html=True,
+                    )
+
+                # Admission readiness section.
+                if global_total_tasks > 0:
+                    st.markdown(
+                        "<div class='hero-section-label'>"
+                        "Admission readiness</div>",
+                        unsafe_allow_html=True,
+                    )
+                    st.progress(global_completed / global_total_tasks)
+                    st.markdown(
+                        f"<div class='hero-progress-text'>"
+                        f"{global_completed} of {global_total_tasks} "
+                        f"tasks complete</div>",
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    cond_total = len(
+                        decision.get("conditions_before_admission") or []
+                    )
+                    if cond_total > 0:
+                        st.markdown(
+                            "<div class='hero-section-label'>"
+                            "Admission readiness</div>",
+                            unsafe_allow_html=True,
+                        )
+                        st.progress(0.0)
+                        st.markdown(
+                            f"<div class='hero-progress-text'>0 of "
+                            f"{cond_total} conditions complete</div>",
+                            unsafe_allow_html=True,
+                        )
+
+                # Owners to contact — clickable cards filter Action Plan.
+                if owner_pending:
+                    st.markdown(
+                        "<div class='hero-section-label'>"
+                        "Who to contact first</div>",
+                        unsafe_allow_html=True,
+                    )
+                    owner_cols = st.columns(min(len(owner_pending), 4))
+                    for i, (owner, n) in enumerate(owner_pending[:4]):
+                        col = owner_cols[i % len(owner_cols)]
+                        display_owner = (
+                            "Needs assignment"
+                            if owner == "Needs Assignment"
+                            else owner
+                        )
+                        btn_label = f"{display_owner}  ·  {n}"
+                        if col.button(
+                            btn_label,
+                            key=f"hero_owner_{owner}",
+                            use_container_width=True,
+                        ):
+                            st.session_state[
+                                "action_plan_owner_filter"
+                            ] = owner
+                            st.rerun()
+
+                # Why this verdict — collapsed by default.
+                if rationale_full:
+                    with st.expander("Why this verdict?", expanded=False):
+                        _render_prose(rationale_full)
+
+
+
+            with st.expander("Audit & Methodology", expanded=False):
+                st.markdown(
+                    f"<div style='font-size:14px; font-weight:600; "
+                    f"color:var(--text-primary);'>Evidence base: "
+                    f"{len(all_snips)} snippets · {unref_count} "
+                    f"unreferenced</div>"
+                    "<div style='font-size:12px; color:var(--text-muted); "
+                    "margin-top:2px;'>Full provenance map and per-snippet "
+                    "audit trail live in the Sources &amp; Debug tab.</div>"
+                    "<div style='border-top:1px solid var(--border-default); "
+                    "margin:12px 0;'></div>"
+                    "<div style='font-size:14px; font-weight:600; "
+                    "color:var(--text-primary);'>Methodology comparison</div>"
+                    "<div style='font-size:12px; color:var(--text-muted); "
+                    "margin-top:2px;'>For evaluation only: compares the "
+                    "staged pipeline against a one-shot baseline.</div>",
+                    unsafe_allow_html=True,
+                )
+                if not compare_baseline:
+                    st.caption(
+                        "Enable 'Compare against baseline' in the sidebar "
+                        "to activate side-by-side rendering."
+                    )
+                if (
+                    compare_baseline
+                    and st.session_state.baseline_output is None
+                ):
+                    if st.button(
+                        "Run baseline single-call for comparison",
+                        key="run_baseline_button",
+                    ):
+                        try:
+                            with st.spinner("Running baseline single-call..."):
+                                dshs_rules = _load_dshs_rules()
+                                st.session_state.baseline_output = run_baseline(
+                                    discharge_summary=st.session_state.source_docs[
+                                        "discharge_summary"
+                                    ],
+                                    family_notes=st.session_state.source_docs[
+                                        "family_notes"
+                                    ],
+                                    disclosure_text=st.session_state.disclosure_text,
+                                    dshs_rules=dshs_rules,
+                                )
+                        except Exception as exc:
+                            st.error(
+                                "Baseline run failed. Try again or proceed "
+                                "without comparison."
+                            )
+                            st.caption(f"Details: {exc}")
+                        else:
+                            st.rerun()
+                elif compare_baseline and st.session_state.baseline_output is not None:
+                    st.caption(
+                        "Baseline already loaded. See per-tab comparisons."
+                    )
+
         def _generate_action_plan() -> str:
             resident_name = (
                 profile.demographics.resident_name_placeholder
