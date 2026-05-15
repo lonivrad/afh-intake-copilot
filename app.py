@@ -9,6 +9,7 @@ optionally compare against the single-call baseline.
 
 from __future__ import annotations
 
+import copy
 import json
 import re
 from datetime import datetime, timedelta
@@ -39,6 +40,105 @@ st.set_page_config(page_title="AFH Acuity Intake Copilot", layout="wide")
 st.markdown(
     """
     <style>
+    /* Editorial typography pairing: Instrument Serif for displays +
+       Libre Franklin for body. Libre Franklin is a Google Fonts
+       revival of Franklin Gothic — a classic American editorial /
+       newspaper grotesque — so it loads for every viewer and stays
+       cohesive with the serif display rather than reading like the
+       generic Inter/Geist default. JetBrains Mono for mono accents. */
+    @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Libre+Franklin:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap');
+
+    /* ============================================================
+       Design tokens — editorial / warm-paper palette.
+       ============================================================ */
+    :root {
+        /* Type families — editorial serif display + Franklin-Gothic
+           grotesque body. */
+        --font-display: "Instrument Serif", "Fraunces", Georgia, serif;
+        --font-body: "Libre Franklin", -apple-system, "Segoe UI",
+                     system-ui, sans-serif;
+        --font-mono: ui-monospace, "JetBrains Mono",
+                     "Menlo", "SF Mono", monospace;
+
+        /* Monochrome surfaces — almost white, very lightly warm. */
+        --surface-0: #fafaf7;       /* page paper */
+        --surface-1: #ffffff;       /* card */
+        --surface-2: #ffffff;       /* elevated */
+        --surface-soft: #f5f4ee;    /* subtle group bg */
+        --surface-muted: #ececea;   /* chip / pill bg */
+
+        /* Hairline borders. */
+        --border-subtle: #efedea;
+        --border-default: #e3e1dc;
+        --border-strong: #c9c6c0;
+
+        /* Ink scale — true near-black to faint. */
+        --text-primary: #0e0e0c;
+        --text-secondary: #3d3d3a;
+        --text-muted: #6c6c66;
+        --text-faint: #a4a49d;
+        --text-on-brand: #ffffff;
+
+        /* App shell ink (sidebar, brand mark) — same as text-primary
+           so nothing competes with the single accent. */
+        --brand-700: #0e0e0c;
+        --brand-600: #1a1a18;
+        --brand-500: #2a2a26;
+        --brand-50:  #f5f4ee;
+
+        /* Single editorial accent — deep oxblood used sparingly for
+           tab indicator, primary action, hero side rule. */
+        --accent-700: #6b1424;
+        --accent-600: #8b1d2c;
+        --accent-500: #a32c3a;
+        --accent-50:  #fbe7ea;
+
+        /* Status colors. Restrained — print-publication palette. */
+        --accent-amber: #a86610;
+        --accent-amber-bg: #f6ecd6;
+        --accent-amber-text: #5d3a07;
+        --accent-red: #8b1d2c;
+        --accent-red-bg: #fbe7ea;
+        --accent-red-text: #6b1424;
+        --accent-green: #1f5f3f;
+        --accent-green-bg: #e3ece3;
+        --accent-green-text: #143b27;
+
+        /* Spacing — generous editorial defaults. */
+        --space-1: 4px;  --space-2: 8px;  --space-3: 12px;
+        --space-4: 16px; --space-5: 20px; --space-6: 24px;
+        --space-8: 32px; --space-10: 40px; --space-12: 48px;
+        --space-16: 64px;
+
+        /* Radius — flatter, more architectural. */
+        --radius-xs: 2px;
+        --radius-sm: 4px;
+        --radius-md: 6px;
+        --radius-lg: 8px;
+        --radius-xl: 12px;
+        --radius-pill: 999px;
+
+        /* Shadows — neutral, very subtle. No warm tint, no glow. */
+        --shadow-1: 0 1px 2px rgba(14,14,12,0.04);
+        --shadow-2: 0 2px 8px rgba(14,14,12,0.06);
+        --shadow-focus: 0 0 0 2px rgba(163,44,58,0.30);
+
+        /* Type scale — editorial display tier sized for confidence. */
+        --type-display: 56px;
+        --type-headline: 40px;
+        --type-title-lg: 28px;
+        --type-title: 20px;
+        --type-body-lg: 16px;
+        --type-body: 15px;
+        --type-caption: 13px;
+        --type-overline: 11px;
+
+        /* Motion. */
+        --ease-standard: cubic-bezier(0.2, 0.0, 0, 1.0);
+        --duration-quick: 120ms;
+        --duration-base: 220ms;
+    }
+
     * {
         box-sizing: border-box;
         overflow-wrap: anywhere !important;
@@ -49,35 +149,743 @@ st.markdown(
         white-space: normal !important;
     }
     section.main * {
-        line-height: 1.55 !important;
+        line-height: 1.6 !important;
     }
-    .summary-card {
-        background: white;
-        border: 1px solid #e5e7eb;
-        border-radius: 12px;
-        padding: 16px 18px;
-        margin-bottom: 14px;
+    /* Page surface — warm cream so cards feel like paper on a desk. */
+    div[data-testid="stMain"] {
+        background: var(--surface-0);
+    }
+    /* Body type defaults to Libre Franklin; serif applied below. */
+    html, body, [class*="css"], div[data-testid="stMarkdownContainer"] {
+        font-family: var(--font-body);
+        color: var(--text-primary);
+    }
+
+    /* ============================================================
+       Type utility classes — use these instead of inline font-size.
+       ============================================================ */
+    .t-display {
+        font-family: var(--font-display);
+        font-size: var(--type-display);
+        font-weight: 600;
+        color: var(--text-primary);
+        letter-spacing: -0.02em;
+        line-height: 1.1;
+        font-variation-settings: "opsz" 144;
+    }
+    .t-headline {
+        font-family: var(--font-display);
+        font-size: var(--type-headline);
+        font-weight: 500;
+        color: var(--text-primary);
+        letter-spacing: 0.005em;
+        line-height: 1.25;
+    }
+    .t-title-lg {
+        font-family: var(--font-display);
+        font-size: var(--type-title-lg);
+        font-weight: 600;
+        color: var(--text-primary);
+        line-height: 1.25;
+        letter-spacing: -0.01em;
+    }
+    .t-title {
+        font-size: var(--type-title);
+        font-weight: 700;
+        color: var(--text-primary);
+        line-height: 1.35;
+    }
+    .t-body-lg {
+        font-size: var(--type-body-lg);
+        color: var(--text-primary);
+    }
+    .t-body {
+        font-size: var(--type-body);
+        color: var(--text-secondary);
+    }
+    .t-caption {
+        font-size: var(--type-caption);
+        color: var(--text-muted);
+    }
+    .t-overline {
+        font-size: var(--type-overline);
+        font-weight: 700;
+        color: var(--text-muted);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+    }
+
+    /* ============================================================
+       Brand bar — minimal app shell.
+       ============================================================ */
+    /* Brand bar — masthead pattern. Issue tag stacks above the
+       title on narrow viewports so the name never clips. */
+    .brand-bar {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--space-2);
+        padding: var(--space-3) 0 var(--space-5) 0;
+        margin-bottom: var(--space-6);
+        border-bottom: 1px solid var(--text-primary);
+    }
+    .brand-issue {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 500;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        max-width: 100%;
+    }
+    .brand-text {
+        display: flex;
+        flex-direction: column;
+        line-height: 1.1;
+        width: 100%;
+    }
+    .brand-name {
+        font-family: var(--font-display);
+        font-size: 44px;
+        font-weight: 500;
+        color: var(--text-primary);
+        letter-spacing: -0.005em;
+        line-height: 1.05;
+        white-space: normal;
+        overflow-wrap: break-word;
+    }
+    .brand-disclaimer {
+        font-family: var(--font-body);
+        font-size: 13px;
+        color: var(--text-muted);
+        margin-top: 8px;
+        letter-spacing: 0;
+        font-style: italic;
+    }
+
+    /* Decorative ornament — three centered dots used between
+       editorial sections. */
+    .ornament {
+        text-align: center;
+        color: var(--border-strong);
+        margin: var(--space-6) 0;
+        font-size: 14px;
+        letter-spacing: 0.6em;
+    }
+    .ornament::before { content: "·  ·  ·"; }
+
+    /* ============================================================
+       Workflow stepper — numbered circles connected by progress lines
+       (Material/Fluent stepper convention).
+       ============================================================ */
+    .stepper-wrap {
+        margin: var(--space-2) 0 var(--space-5) 0;
+    }
+    .stepper {
+        display: flex;
+        align-items: center;
+        gap: 0;
+        max-width: 760px;
+    }
+    .step {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        flex: 0 0 auto;
+        min-width: 72px;
+    }
+    .step-circle {
+        width: 28px;
+        height: 28px;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 700;
+        border: 2px solid var(--border-strong);
+        background: var(--surface-1);
+        color: var(--text-muted);
+        transition: all var(--duration-base) var(--ease-standard);
+    }
+    .step.done .step-circle {
+        background: var(--accent-green);
+        border-color: var(--accent-green);
+        color: var(--text-on-brand);
+    }
+    .step.current .step-circle {
+        background: var(--text-primary);
+        border-color: var(--text-primary);
+        color: var(--text-on-brand);
+        box-shadow: var(--shadow-focus);
+    }
+    .step.next .step-circle {
+        background: var(--surface-1);
+        border-color: var(--border-strong);
+        color: var(--text-faint);
+    }
+    .step-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-muted);
+        margin-top: 6px;
+    }
+    .step.done .step-label {
+        color: var(--accent-green);
+    }
+    .step.current .step-label {
+        color: var(--text-primary);
+        font-weight: 700;
+    }
+    .step.next .step-label {
+        color: var(--text-faint);
+        font-weight: 400;
+    }
+    .step-line {
+        flex: 1 1 auto;
+        height: 2px;
+        background: var(--border-default);
+        margin: 0 4px;
+        margin-bottom: 22px; /* align with circle vertical center */
+    }
+    .step-line.done {
+        background: var(--accent-green);
+    }
+
+    /* ============================================================
+       Sticky tab bar + brand-color indicator.
+       ============================================================ */
+    /* Tab bar — render each tab as a bordered button, equally
+       spaced and sticky at the top of the scroll. */
+    div[data-baseweb="tab-list"] {
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        background: var(--surface-1);
+        border-bottom: 1px solid var(--border-default);
+        padding: 10px 0 !important;
+        gap: 8px !important;
+        display: flex !important;
+        flex-wrap: wrap !important;
+    }
+    div[data-baseweb="tab-list"] button[role="tab"] {
+        font-weight: 600 !important;
+        font-size: 13px !important;
+        color: var(--text-secondary) !important;
+        background: var(--surface-1) !important;
+        border: 1px solid var(--border-strong) !important;
+        border-radius: var(--radius-sm) !important;
+        padding: 8px 14px !important;
+        margin: 0 !important;
+        transition: all var(--duration-quick) var(--ease-standard);
+    }
+    div[data-baseweb="tab-list"] button[role="tab"]:hover {
+        color: var(--text-primary) !important;
+        border-color: var(--text-primary) !important;
+        background: var(--surface-soft) !important;
+    }
+    div[data-baseweb="tab-list"] button[role="tab"][aria-selected="true"] {
+        color: var(--text-on-brand) !important;
+        background: var(--text-primary) !important;
+        border-color: var(--text-primary) !important;
+    }
+    div[data-baseweb="tab-list"] button[role="tab"][aria-selected="true"] * {
+        color: var(--text-on-brand) !important;
+    }
+    /* Hide the default Streamlit underline indicator — bordered
+       button + dark fill already conveys selection. */
+    div[data-baseweb="tab-highlight"] {
+        display: none !important;
+    }
+
+    /* ============================================================
+       Hero status block — editorial pull-quote treatment.
+       ============================================================ */
+    .hero-card {
+        background: var(--surface-2);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-xl);
+        padding: var(--space-6) var(--space-8);
+        margin: var(--space-2) 0 var(--space-8) 0;
+        box-shadow: var(--shadow-1);
+        position: relative;
+    }
+    /* Hairline marginal rule — single-color editorial signature. */
+    .hero-card::before {
+        content: "";
+        position: absolute;
+        left: 0; top: 24px; bottom: 24px;
+        width: 2px;
+        background: var(--accent-600);
+    }
+    .hero-verdict {
+        font-size: var(--type-overline);
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .hero-blocker-num {
+        font-family: var(--font-display);
+        font-size: 84px;
+        font-weight: 500;
+        line-height: 1.0;
+        color: var(--text-primary);
+        margin: 12px 0 0 0;
+        letter-spacing: -0.04em;
+        font-feature-settings: "tnum", "lnum";
+        font-variation-settings: "opsz" 144;
+    }
+    .hero-blocker-label {
+        font-family: var(--font-display);
+        font-size: 24px;
+        font-style: italic;
+        font-weight: 500;
+        color: var(--text-secondary);
+        margin-top: 8px;
+        letter-spacing: 0.04em;
+        word-spacing: 0.06em;
+    }
+    .hero-section-label {
+        font-size: var(--type-overline);
+        font-weight: 700;
+        color: var(--text-muted);
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        margin: 24px 0 8px 0;
+    }
+    .hero-progress-text {
+        font-size: 13px;
+        color: var(--text-secondary);
+        margin-top: 6px;
+        font-feature-settings: "tnum";
+    }
+
+    /* ============================================================
+       Chips + filter pills.
+       ============================================================ */
+    .filter-chip {
+        display: inline-block;
+        background: var(--accent-amber-bg);
+        color: var(--accent-amber-text);
+        padding: 3px 10px;
+        border-radius: var(--radius-pill);
+        font-size: 12px;
+        font-weight: 700;
+        margin-left: 8px;
+    }
+
+    /* ============================================================
+       Slim section header used inside tabs — editorial title set in
+       Fraunces with a tighter sans subtitle.
+       ============================================================ */
+    .ap-strip-title {
+        font-family: var(--font-display);
+        font-size: var(--type-title-lg);
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 4px;
+        letter-spacing: -0.01em;
+    }
+    .ap-strip-sub {
+        font-size: 13px;
+        color: var(--text-muted);
+        font-style: italic;
+    }
+    .section-heading {
+        font-family: var(--font-display);
+        font-size: var(--type-title);
+        font-weight: 600;
+        color: var(--text-primary);
+        margin: 18px 0 8px 0;
+        letter-spacing: -0.005em;
+    }
+    /* Tight workstream subgroup label — small caps overline, minimal
+       vertical margin so task rows sit directly beneath it without a
+       big divider gap. */
+    .ws-subgroup {
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--text-muted);
+        margin: 20px 0 10px 0;
+    }
+    .ws-subgroup:first-child {
+        margin-top: 6px;
+    }
+
+    /* ============================================================
+       Buttons — refine focus, hover, primary / secondary.
+       ============================================================ */
+    button[data-testid="stBaseButton-secondary"]:hover {
+        border-color: var(--brand-500);
+        color: var(--brand-500);
+    }
+    button[data-testid="stBaseButton-primary"],
+    button[data-testid="stBaseButton-primaryFormSubmit"] {
+        background: var(--text-primary) !important;
+        border-color: var(--text-primary) !important;
+        color: #ffffff !important;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+    }
+    /* Force white on every nested element Streamlit puts inside the
+       button (label wrapper, <p>, span) — disabled state included. */
+    button[data-testid="stBaseButton-primary"] *,
+    button[data-testid="stBaseButton-primaryFormSubmit"] * {
+        color: #ffffff !important;
+        fill: #ffffff !important;
+    }
+    button[data-testid="stBaseButton-primary"]:hover,
+    button[data-testid="stBaseButton-primaryFormSubmit"]:hover {
+        background: var(--accent-700) !important;
+        border-color: var(--accent-700) !important;
+        color: #ffffff !important;
+    }
+    button[data-testid="stBaseButton-primary"]:disabled,
+    button[data-testid="stBaseButton-primaryFormSubmit"]:disabled {
+        background: var(--text-primary) !important;
+        border-color: var(--text-primary) !important;
+        color: #ffffff !important;
+        opacity: 0.6 !important;
+        cursor: not-allowed;
+    }
+    button[data-testid="stBaseButton-primary"]:disabled *,
+    button[data-testid="stBaseButton-primaryFormSubmit"]:disabled * {
+        color: #ffffff !important;
+        fill: #ffffff !important;
+    }
+    button[data-testid="stBaseButton-secondary"] {
+        background: var(--surface-1);
+        border-color: var(--border-strong);
+        color: var(--text-primary);
+        font-weight: 500;
+    }
+    button:focus-visible {
+        outline: none;
+        box-shadow: var(--shadow-focus);
+    }
+    /* Start Intake — always a solid black fill, even while disabled
+       (no grey fade), so the on-ramp action reads clearly. Selector
+       is intentionally specific (class + data-testid + :disabled) so
+       it outranks the global disabled-primary rule. */
+    div[class*="st-key-start_intake_btn"]
+      button[data-testid="stBaseButton-primary"],
+    div[class*="st-key-start_intake_btn"]
+      button[data-testid="stBaseButton-primary"]:disabled,
+    div[class*="st-key-start_intake_btn"]
+      button[data-testid="stBaseButton-primary"]:hover,
+    div[class*="st-key-start_intake_btn"]
+      button[data-testid="stBaseButton-primaryFormSubmit"],
+    div[class*="st-key-start_intake_btn"]
+      button[data-testid="stBaseButton-primaryFormSubmit"]:disabled {
+        background: #000000 !important;
+        border-color: #000000 !important;
+        color: #ffffff !important;
+        opacity: 1 !important;
+        cursor: pointer;
+    }
+    div[class*="st-key-start_intake_btn"] button *,
+    div[class*="st-key-start_intake_btn"] button:disabled * {
+        color: #ffffff !important;
+    }
+
+    /* Evidence ID chips — uniform mono pills regardless of label
+       length (S3 vs OP18). Same height, centered, monospace. */
+    div[class*="st-key-ev_chip_"] button {
+        font-family: var(--font-mono) !important;
+        font-size: 12px !important;
+        font-weight: 600 !important;
+        letter-spacing: 0.02em !important;
+        padding: 4px 6px !important;
+        min-height: 30px !important;
+        background: var(--surface-soft) !important;
+        border: 1px solid var(--border-strong) !important;
+        color: var(--text-secondary) !important;
+        border-radius: var(--radius-sm) !important;
+    }
+    div[class*="st-key-ev_chip_"] button:hover {
+        border-color: var(--accent-600) !important;
+        color: var(--accent-700) !important;
+        background: var(--surface-1) !important;
+    }
+    div[class*="st-key-ev_chip_"] button * {
+        color: inherit !important;
+    }
+
+    /* ============================================================
+       Form polish — visible borders + focus rings for every input.
+       Expander chrome quiet so content reads first.
+       ============================================================ */
+    input:focus, textarea:focus, select:focus {
+        outline: none;
+    }
+    /* Always-visible borders so inputs nested inside expanders
+       (Action Plan task cards, Add custom task, etc.) read as
+       discrete fields instead of running together. */
+    div[data-baseweb="select"] > div:first-child,
+    div[data-baseweb="input"],
+    div[data-baseweb="textarea"],
+    div[data-testid="stDateInputField"],
+    div[data-testid="stTextInputRootElement"] {
+        border: 1px solid var(--border-strong) !important;
+        border-radius: var(--radius-sm) !important;
+        background: var(--surface-1) !important;
+    }
+    div[data-baseweb="select"] > div:first-child:hover,
+    div[data-baseweb="input"]:hover,
+    div[data-baseweb="textarea"]:hover {
+        border-color: var(--text-secondary) !important;
+    }
+    div[data-baseweb="input"]:focus-within,
+    div[data-baseweb="textarea"]:focus-within,
+    div[data-baseweb="select"]:focus-within {
+        box-shadow: var(--shadow-focus);
+        border-radius: var(--radius-sm);
+    }
+    /* Expander chrome — quieter so the content reads first. */
+    div[data-testid="stExpander"] {
+        border: 1px solid var(--border-default) !important;
+        border-radius: var(--radius-md) !important;
+        background: var(--surface-1);
+        margin-bottom: 10px !important;
+    }
+    /* Breathing room around the statement in each collapsed card so
+       a long worklist doesn't read as a squished block. */
+    div[data-testid="stExpander"] summary {
+        font-weight: 600;
+        color: var(--text-primary);
+        padding-top: 12px !important;
+        padding-bottom: 12px !important;
+        line-height: 1.5 !important;
+    }
+    /* Generated-document preview: pull the leading title up tight
+       under the expander and shrink the Expand-all control so there
+       isn't a big empty band between the two. */
+    div[data-testid="stExpanderDetails"]
+      [data-testid="stMarkdownContainer"] h1 {
+        font-size: 22px !important;
+        margin: 4px 0 8px 0 !important;
+        line-height: 1.25 !important;
+    }
+    div[class*="st-key-expand_all_doc_toggle"] {
+        margin: -4px 0 2px 0 !important;
+    }
+    div[class*="st-key-expand_all_doc_toggle"] button {
+        padding: 2px 12px !important;
+        min-height: 26px !important;
+        font-size: 12px !important;
+    }
+    /* More breathing room between bullet points in dense document
+       sections so a long list isn't overwhelming to scan. */
+    div[data-testid="stExpanderDetails"]
+      [data-testid="stMarkdownContainer"] li {
+        margin-bottom: 9px !important;
+        line-height: 1.65 !important;
+    }
+    div[data-testid="stExpanderDetails"]
+      [data-testid="stMarkdownContainer"] ul,
+    div[data-testid="stExpanderDetails"]
+      [data-testid="stMarkdownContainer"] ol {
+        margin-bottom: 12px !important;
+    }
+
+    /* ============================================================
+       Page padding — breathing room without consuming first viewport.
+       ============================================================ */
+    div.block-container {
+        padding-top: 24px !important;
+        padding-left: 32px !important;
+        padding-right: 32px !important;
+        max-width: 1200px;
+    }
+
+    /* ============================================================
+       Sidebar typography.
+       ============================================================ */
+    section[data-testid="stSidebar"] {
+        background: var(--surface-soft);
+        border-right: 1px solid var(--border-default);
+    }
+
+    /* ============================================================
+       Motion — restrained, professional micro-interactions.
+       ============================================================ */
+    @keyframes fade-up {
+        from { opacity: 0; transform: translateY(6px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes pulse-ring {
+        0%   { box-shadow: 0 0 0 0 rgba(37,99,235,0.55); }
+        70%  { box-shadow: 0 0 0 10px rgba(37,99,235,0); }
+        100% { box-shadow: 0 0 0 0 rgba(37,99,235,0); }
+    }
+    @keyframes shimmer {
+        0%   { background-position: -200px 0; }
+        100% { background-position: 200px 0; }
+    }
+    .hero-card {
+        animation: fade-up 360ms var(--ease-standard) both;
+    }
+    .step.current .step-circle {
+        animation: pulse-ring 1800ms var(--ease-standard) infinite;
+    }
+    /* Card-style buttons (used by hero owner cards + next steps)
+       pick up a soft lift on hover. */
+    div[data-testid="stHorizontalBlock"]
+      button[data-testid="stBaseButton-secondary"] {
+        transition: transform var(--duration-quick) var(--ease-standard),
+                    box-shadow var(--duration-quick) var(--ease-standard),
+                    border-color var(--duration-quick) var(--ease-standard);
+    }
+    div[data-testid="stHorizontalBlock"]
+      button[data-testid="stBaseButton-secondary"]:hover {
+        transform: translateY(-1px);
+        box-shadow: var(--shadow-2);
+        border-color: var(--brand-500);
+        color: var(--brand-500);
+    }
+    /* Subtle cap on hero card depth. */
+    .hero-card:hover {
+        box-shadow: var(--shadow-2);
+    }
+
+    /* ============================================================
+       Friendly empty-state badges.
+       ============================================================ */
+    .empty-ok {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 14px;
+        border-radius: var(--radius-pill);
+        background: var(--accent-green-bg);
+        color: var(--accent-green-text);
+        font-size: 13px;
+        font-weight: 600;
+        margin: 6px 0;
+    }
+    .empty-ok::before {
+        content: "✓";
+        font-weight: 800;
+    }
+
+    /* ============================================================
+       Milestone toast (interview progress).
+       ============================================================ */
+    .milestone {
+        background: var(--surface-1);
+        border-left: 2px solid var(--accent-600);
+        color: var(--text-primary);
+        border-radius: 0;
+        padding: 10px 18px;
+        font-family: var(--font-body);
+        font-size: 16px;
+        font-style: italic;
+        font-weight: 700;
+        color: var(--text-primary);
+        letter-spacing: 0.07em;
+        word-spacing: 0.12em;
+        line-height: 1.7;
+        margin: 8px 0 12px 0;
+        animation: fade-up 320ms var(--ease-standard) both;
+    }
+
+    /* Interview question — editorial serif, light weight, so the
+       prompt feels considered rather than a bulky bold heading. */
+    .interview-q {
+        font-family: var(--font-display);
+        font-size: 27px;
+        font-weight: 400;
+        line-height: 1.38;
+        letter-spacing: 0.015em;
+        color: var(--text-primary);
+        margin: 8px 0 12px 0;
     }
     </style>
     """,
     unsafe_allow_html=True,
 )
-st.title("AFH Acuity Intake Copilot")
-st.caption(
-    "Decision support for Adult Family Home intake in Washington State. "
-    "Not a clinical, legal, or billing determination. All outputs require review."
+st.markdown(
+    "<div class='brand-bar'>"
+    "<div class='brand-issue'>&nbsp;</div>"
+    "<div class='brand-text'>"
+    "<span class='brand-name'>AFH Acuity Intake Copilot</span>"
+    "<span class='brand-disclaimer'>"
+    "Decision support · not clinical, legal, or billing. "
+    "All outputs require review."
+    "</span>"
+    "</div>"
+    "</div>",
+    unsafe_allow_html=True,
 )
+
+
+# ===== Workflow stepper =====
+
+_STEPPER_STAGES: list[tuple[str, str]] = [
+    ("input", "Inputs"),
+    ("profile_review", "Profile"),
+    ("interview", "Interview"),
+    ("synthesis_ready", "Generate"),
+    ("synthesis_done", "Results"),
+]
+
+
+def _render_workflow_stepper(current_stage: str) -> None:
+    """Material/Fluent-style numbered-circle stepper with connecting
+    progress lines. Done steps fill green; the current step uses brand
+    blue with a focus ring; future steps are faint outlines."""
+    if current_stage not in {s[0] for s in _STEPPER_STAGES}:
+        return
+    seen_current = False
+    parts: list[str] = []
+    for i, (key, label) in enumerate(_STEPPER_STAGES):
+        if key == current_stage:
+            state = "current"
+            seen_current = True
+            mark = str(i + 1)
+        elif seen_current:
+            state = "next"
+            mark = str(i + 1)
+        else:
+            state = "done"
+            mark = "✓"
+        parts.append(
+            f"<div class='step {state}'>"
+            f"<span class='step-circle'>{mark}</span>"
+            f"<span class='step-label'>{label}</span>"
+            f"</div>"
+        )
+        if i < len(_STEPPER_STAGES) - 1:
+            line_cls = "step-line done" if state == "done" else "step-line"
+            parts.append(f"<div class='{line_cls}'></div>")
+    st.markdown(
+        f"<div class='stepper-wrap'>"
+        f"<div class='stepper'>{''.join(parts)}</div>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+
+_render_workflow_stepper(st.session_state.get("stage", "input"))
 
 
 # ===== Session-state init =====
 
 DEFAULT_STATE = {
-    "stage": "input",  # input | interview | synthesis_ready | synthesis_done
+    "stage": "input",  # input | profile_review | interview | synthesis_ready | synthesis_done
     "profile": None,
     "triggered_conditions": [],
     "source_docs": None,
     "disclosure_text": "",
     "session": None,
+    "interview_history": [],
     "interview_total_nodes": 0,
     "artifacts": None,
     "intake_decision": None,
@@ -173,6 +981,214 @@ _NODE_SECTION = {
     "PT_HISTORY": "Physical therapy",
     "PT_NOTES": "Physical therapy",
 }
+
+
+_HUMAN_OPTION_LABELS: dict[str, str] = {
+    "type_1": "Type 1",
+    "type_2": "Type 2",
+    "unknown": "Unknown",
+    "fixed_dose": "Fixed dose",
+    "sliding_scale": "Sliding scale",
+    "basal_bolus": "Basal-bolus",
+    "self": "Self",
+    "family": "Family",
+    "delegating_RN_via_AFH_staff": "Delegating RN via AFH staff",
+    "contracted_LPN_or_RN": "Contracted LPN or RN",
+    "once_daily": "Once daily",
+    "two_to_three_daily": "2–3 times daily",
+    "four_or_more_daily": "4+ times daily",
+    "PRN_only": "PRN only",
+    "mild_self_treated": "Mild (self-treated)",
+    "moderate_third_party_assist": "Moderate (third-party assist)",
+    "severe_ER_or_hospitalization": "Severe (ER or hospitalization)",
+    "none": "None",
+    "carbohydrate_controlled": "Carbohydrate-controlled",
+    "renal_diabetic": "Renal / diabetic",
+    "low_sodium": "Low sodium",
+    "modified_texture": "Modified texture",
+    "tube_feeding": "Tube feeding",
+    "other": "Other",
+    "confirmed": "Confirmed",
+    "suspected_unconfirmed": "Suspected (unconfirmed)",
+    "no_concern": "No concern",
+    "alzheimers": "Alzheimer's",
+    "vascular": "Vascular",
+    "lewy_body": "Lewy body",
+    "frontotemporal": "Frontotemporal",
+    "mixed": "Mixed",
+    "unspecified": "Unspecified",
+    "early": "Early",
+    "moderate": "Moderate",
+    "advanced": "Advanced",
+    "end_stage": "End-stage",
+    "oriented_x3": "Oriented to person, place, and time",
+    "oriented_x2_person_place": "Oriented to person and place",
+    "oriented_x1_person": "Oriented to person only",
+    "fully_disoriented": "Fully disoriented",
+    "toileting_or_bathroom": "Toileting or bathroom",
+    "bedside_or_transfer": "Bedside or transfer",
+    "ambulating_indoors": "Ambulating indoors",
+    "ambulating_outdoors": "Ambulating outdoors",
+    "during_personal_care": "During personal care",
+    "unwitnessed_unknown": "Unwitnessed / unknown",
+    "no_injury": "No injury",
+    "minor_injury_treated_in_place": "Minor injury (treated in place)",
+    "ER_visit_no_admission": "ER visit (no admission)",
+    "hospitalization": "Hospitalization",
+    "fracture_or_head_injury": "Fracture or head injury",
+    "cane": "Cane",
+    "walker": "Walker",
+    "rollator": "Rollator",
+    "wheelchair_self_propel": "Wheelchair (self-propel)",
+    "wheelchair_staff_propel": "Wheelchair (staff-propel)",
+    "transfer_lift_only_non_ambulatory": "Transfer / lift only (non-ambulatory)",
+    "perimeter_monitoring_alarm": "Wandering / exit monitoring alarm",
+    "lift_transfer": "Mechanical lift / transfer equipment",
+    "shower_seating": "Shower seating (shower chair or bench)",
+    "stair_lift": "Stair lift",
+    "door_widening": "Doorway widening for wheelchair / walker access",
+    "True": "Yes",
+    "False": "No",
+}
+
+
+def _humanize_option_value(opt: str) -> str:
+    """Render an enum value (or boolean repr) in human-friendly form.
+    Falls back to underscore-replaced title case when not in the
+    explicit map."""
+    if opt is None:
+        return ""
+    if opt in _HUMAN_OPTION_LABELS:
+        return _HUMAN_OPTION_LABELS[opt]
+    s = str(opt).strip()
+    if not s:
+        return ""
+    return s.replace("_", " ").strip().title()
+
+
+_NODE_LABEL_HUMAN: dict[str, str] = {
+    "DIABETES_TYPE": "Diabetes type",
+    "INSULIN_USE": "Insulin use",
+    "INSULIN_REGIMEN": "Insulin regimen",
+    "INSULIN_ADMIN": "Insulin administration",
+    "ORAL_MEDS": "Oral diabetes meds",
+    "BGM_FREQUENCY": "Blood glucose monitoring",
+    "LAST_A1C": "Last A1C",
+    "HYPO_HISTORY": "Hypoglycemia (6mo)",
+    "HYPO_SEVERITY": "Hypoglycemia severity",
+    "DIET_RESTRICTIONS": "Diet restrictions",
+    "DIET_NOTES": "Diet notes",
+    "DX_STATUS": "Diagnosis status",
+    "DX_TYPE": "Dementia type",
+    "STAGE": "Stage",
+    "ORIENTATION_LEVEL": "Orientation",
+    "BEHAV_AGITATION": "Agitation",
+    "BEHAV_EXIT_SEEKING": "Exit-seeking / wandering",
+    "BEHAV_SUNDOWNING": "Sundowning",
+    "BEHAV_RESIST_CARE": "Resists care",
+    "PRIOR_PLACEMENT_TYPE": "Prior placement",
+    "MOVE_REASON": "Reason for move",
+    "FAMILY_PRIMARY_CONTACT": "Family contact",
+    "FAMILY_COMM_PREF": "Family comm preference",
+    "FALL_HISTORY_6MO": "Falls in last 6mo",
+    "FALL_COUNT": "Fall count",
+    "FALL_CIRCUMSTANCES": "Fall circumstance",
+    "FALL_OUTCOMES": "Worst fall outcome",
+    "ASSISTIVE_DEVICE": "Mobility aid",
+    "GAIT_STABILITY": "Gait stability",
+    "MEDS_FALL_RISK": "Fall-risk medications",
+    "MEDS_FALL_RISK_CATEGORIES": "Fall-risk categories",
+    "HOME_ACCOMMODATIONS": "Home accommodations",
+    "PT_HISTORY": "Physical therapy",
+    "PT_NOTES": "Physical therapy notes",
+}
+
+
+_QUESTION_TEXT_OVERRIDES: dict[str, str] = {
+    "BEHAV_EXIT_SEEKING": (
+        "Has the resident shown wandering, exit-seeking, or attempts "
+        "to leave the home?"
+    ),
+    "MEDS_FALL_RISK_CATEGORIES": (
+        "Which fall-risk-increasing medication categories does the "
+        "resident take?"
+    ),
+}
+
+
+# Enum nodes where several options can legitimately co-apply — render
+# as a multi-select instead of single-choice buttons. The backend field
+# is still a single value; when >1 is chosen the combined answer flows
+# through the normal parser (which normalizes to the schema, e.g.
+# "multiple_modifications") and the literal selections are preserved in
+# the operator evidence snippet.
+_MULTISELECT_ENUM_NODES = {"HOME_ACCOMMODATIONS"}
+
+# UI-only tweaks to the checkbox option list for a multi-select node:
+# drop options that aren't useful to surface, and add operator-relevant
+# choices not in the tree. Submitted values still flow through the
+# normal parser (and stay verbatim in the evidence snippet); no schema
+# or tree-file change.
+_MULTISELECT_OPTION_OVERRIDES: dict[str, dict[str, object]] = {
+    "HOME_ACCOMMODATIONS": {
+        "remove": {"multiple_modifications"},
+        "add": [
+            "lift_transfer",
+            "shower_seating",
+            "stair_lift",
+            "door_widening",
+        ],
+    },
+}
+
+
+_FRID_CATEGORY_OPTIONS = [
+    "Benzodiazepines",
+    "Opioids",
+    "Antipsychotics",
+    "Sedative-hypnotics",
+    "Anticholinergics",
+    "Antidepressants",
+    "Antihypertensives / orthostatic BP medications",
+    "Diuretics",
+    "Other",
+    "None",
+]
+
+
+def _has_active_interview_question(session) -> bool:
+    """True only when the session has a live, in-bounds current question.
+    Guards every UI read of session.trees[session.current_tree_idx] so a
+    completed / reset / advanced-past-end interview cannot crash the
+    sidebar or the interview stage."""
+    return (
+        session is not None
+        and getattr(session, "trees", None)
+        and 0 <= session.current_tree_idx < len(session.trees)
+        and session.current_node_id is not None
+    )
+
+
+def _snapshot_session(session):
+    """Deep-copy an InterviewSession so the operator can step Back to a
+    prior question. The Anthropic client isn't deep-copyable, so it is
+    detached during the copy and the live reference is reattached to
+    both the original and the snapshot afterwards."""
+    client = getattr(session, "_client", None)
+    try:
+        session._client = None
+        snap = copy.deepcopy(session)
+    finally:
+        session._client = client
+    snap._client = client
+    return snap
+
+
+def _restore_session(snap) -> None:
+    """Make a snapshot the live session. session.profile is the
+    deep-copied profile, so keep st.session_state.profile in sync."""
+    st.session_state.session = snap
+    st.session_state.profile = snap.profile
 
 
 def _first_two_sentences(text: str) -> str:
@@ -393,7 +1409,7 @@ def _render_care_plan_metadata(
         len(care_plan.get(k, []) or []) for _, k in _CARE_PLAN_CATEGORIES
     )
     high_ids = _high_gap_snippet_ids(risk_register)
-    blocker_linked = sum(
+    flagged_linked = sum(
         1
         for _, k in _CARE_PLAN_CATEGORIES
         for it in (care_plan.get(k, []) or [])
@@ -403,7 +1419,7 @@ def _render_care_plan_metadata(
     st.caption(
         f"Generated {today} · Based on {n_snippets} evidence "
         f"snippets · {total_items} care items · "
-        f"{blocker_linked} blocker-linked items"
+        f"{flagged_linked} flagged items"
     )
 
 
@@ -422,40 +1438,95 @@ def _humanize_evidence_line(snippet) -> tuple[str, str | None]:
         context = None if is_raw_claim or claim == vt else claim or None
         return f"- **Operator answered:** {vt}", context
     if snippet.source == "discharge":
-        return f"- **Discharge:** {vt}", None
+        return f"- **Clinical record:** {vt}", None
     if snippet.source == "family":
         return f"- **Family:** {vt}", None
     return f"- `{snippet.snippet_id}` · {vt}", None
 
 
 def _render_humanized_evidence(
-    profile: ResidentProfile, snippet_ids: list[str]
+    profile: ResidentProfile, snippet_ids: list[str], context_key: str | None = None,
 ) -> None:
-    if not snippet_ids:
-        return
-    by_id = {s.snippet_id: s for s in profile.evidence_snippets}
-    with st.expander(f"Evidence ({len(snippet_ids)})", expanded=False):
-        for sid in snippet_ids:
-            snip = by_id.get(sid)
-            if snip is None:
-                st.markdown(f"- `{sid}` — _(not in current profile)_")
-                continue
-            line, context = _humanize_evidence_line(snip)
-            st.markdown(line)
-            if context:
-                st.caption(f"Context: {context}")
+    """Back-compat shim; delegates to the unified evidence renderer."""
+    _render_evidence_unified(
+        profile, snippet_ids, context_key=context_key
+    )
+
+
+def _clip_label(text: str, limit: int = 220) -> str:
+    """Trim only genuinely over-long labels, and only at a word
+    boundary — never a mid-sentence ellipsis. Streamlit expander
+    labels wrap, so the full phrase is preferred."""
+    t = " ".join((text or "").split())
+    if len(t) <= limit:
+        return t
+    cut = t[:limit].rsplit(" ", 1)[0].rstrip(" ,;:")
+    return f"{cut}…"
 
 
 def _care_item_title(recommendation: str) -> str:
-    """First sentence (or first 120 chars, whichever is shorter) for
-    the collapsed care-item expander label."""
-    rec = (recommendation or "").strip()
+    """The first sentence of the recommendation — a complete BLUF
+    directive, used as the care-item expander header (no mid-sentence
+    truncation)."""
+    rec = " ".join((recommendation or "").split())
     if not rec:
         return "Care item"
-    first = re.split(r"(?<=[.!?])\s+", rec)[0]
-    if len(first) <= 120:
-        return first
-    return rec[:120].rstrip() + "…"
+    first = re.split(r"(?<=[.!?])\s+", rec)[0].strip()
+    return _clip_label(first)
+
+
+_EVID_CODE_RE = re.compile(
+    r"\b(?:gap_\d+|(?:S|F|OP)\d+(?:/(?:S|F|OP)?\d+)*)\b"
+)
+
+
+def _strip_codes(text: str) -> str:
+    """Remove inline evidence / gap codes from human-readable prose
+    and tidy the leftover punctuation. The codes remain available in
+    the labeled Evidence sections and the Evidence Map tab for audit;
+    they just don't interrupt the sentence. Display-only — source
+    text is not modified."""
+    t = _EVID_CODE_RE.sub("", text)
+    # Drop parens/brackets left empty after a code was removed.
+    t = re.sub(r"[\(\[]\s*[/,;]?\s*[\)\]]", "", t)
+    # Tidy stray separators and whitespace.
+    t = re.sub(r"\s+([.,;:)\]])", r"\1", t)
+    t = re.sub(r"([(\[])\s+", r"\1", t)
+    t = re.sub(r"\s{2,}", " ", t)
+    t = re.sub(r"\s+([—–-])\s+\1", r" \1", t)
+    return t.strip()
+
+
+def _render_prose(text: str, label: str | None = None) -> None:
+    """Render a dense paragraph as readable prose: one sentence per
+    block, generous spacing, a comfortable reading measure, and with
+    audit codes stripped out of the sentence flow. Display-only;
+    source text is not modified."""
+    body = _strip_codes((text or "").strip())
+    if not body:
+        return
+    sentences = re.split(r"(?<=[.;])\s+(?=[A-Z(])", body)
+    paras = "".join(
+        "<p style='margin:0 0 12px 0;'>"
+        + html_escape(s.strip())
+        + "</p>"
+        for s in sentences
+        if s.strip()
+    )
+    label_html = ""
+    if label:
+        label_html = (
+            "<div style='font-size:12px;font-weight:700;"
+            "text-transform:uppercase;letter-spacing:0.06em;"
+            "color:var(--text-muted);margin:0 0 8px 0;'>"
+            f"{html_escape(label)}</div>"
+        )
+    st.markdown(
+        "<div style='max-width:66ch;font-size:15px;"
+        "line-height:1.75;color:var(--text-secondary);'>"
+        f"{label_html}{paras}</div>",
+        unsafe_allow_html=True,
+    )
 
 
 def _render_care_plan_item(
@@ -466,15 +1537,15 @@ def _render_care_plan_item(
     with st.expander(title, expanded=False):
         if _is_blocker_linked(item, high_snippet_ids):
             st.warning(
-                "Blocker-linked: shares evidence with a "
-                "high-severity gap"
+                "Flagged: shares evidence with a high-severity "
+                "capability gap"
             )
         # Only show the full recommendation when it adds content beyond
         # what the collapsed title already showed.
         if rec and rec != title and len(rec) > len(title):
-            st.markdown(f"**Recommendation:** {rec}")
+            _render_prose(rec, label="Recommendation")
         if item.get("rationale"):
-            st.markdown(f"**Rationale:** {item['rationale']}")
+            _render_prose(item["rationale"], label="Rationale")
         _render_humanized_evidence(
             profile, item.get("evidence_snippet_ids", []) or []
         )
@@ -634,15 +1705,6 @@ def _infer_owner(question_text: str) -> str:
     return "Unassigned"
 
 
-def _render_talking_point_card(idx: int, text: str) -> None:
-    """Render a single 'What to say' talking-point card via render_info_card."""
-    render_info_card(
-        f"TALKING POINT {idx}",
-        f"<strong>What to say:</strong> {html_escape(text)}",
-        accent="#1e3a5f",
-    )
-
-
 def _render_disagreement_card_structured(idx: int, d) -> None:
     """Render a structured disagreement card using profile.source_disagreements
     fields. Severity is UI-inferred from the field path."""
@@ -652,17 +1714,17 @@ def _render_disagreement_card_structured(idx: int, d) -> None:
     )
     rows: list[str] = [
         f'<div style="margin-bottom:8px;"><strong>Topic:</strong> '
-        f'{html_escape(d.field)}</div>'
+        f'{html_escape(_strip_codes(d.field))}</div>'
     ]
     if d.discharge_claim:
         rows.append(
-            '<div style="margin-bottom:6px;"><strong>Discharge says:</strong> '
-            f'{html_escape(d.discharge_claim)}</div>'
+            '<div style="margin-bottom:6px;"><strong>Clinical record says:</strong> '
+            f'{html_escape(_strip_codes(d.discharge_claim))}</div>'
         )
     if d.family_claim:
         rows.append(
             '<div style="margin-bottom:6px;"><strong>Family says:</strong> '
-            f'{html_escape(d.family_claim)}</div>'
+            f'{html_escape(_strip_codes(d.family_claim))}</div>'
         )
     if chips_html:
         rows.append(
@@ -672,10 +1734,9 @@ def _render_disagreement_card_structured(idx: int, d) -> None:
     body_html = "".join(rows)
     st.markdown(
         f"""
-        <div class="summary-card" style="border-left: 5px solid {severity_color};">
+        <div class="summary-card" style="border-left: 4px solid {severity_color}; padding-left: 22px;">
           <div style="margin-bottom:8px;">
             <span style="background:{severity_color}; color:white; padding:3px 9px; border-radius:6px; font-size:11px; font-weight:700; letter-spacing:.04em;">{severity_label}</span>
-            <span style="font-size:11px; color:#6b7280; font-weight:600; margin-left:8px;">UI priority (inferred from field path)</span>
           </div>
           <div style="font-size:13px; font-weight:800; color:#374151; letter-spacing:.04em; text-transform:uppercase; margin-bottom:8px;">
             CLINICAL CONFLICT
@@ -701,17 +1762,16 @@ def _render_disagreement_card_narrative(idx: int, text: str) -> None:
         topic, body = f"Disagreement {idx}", text.strip()
     st.markdown(
         f"""
-        <div class="summary-card" style="border-left: 5px solid {severity_color};">
+        <div class="summary-card" style="border-left: 4px solid {severity_color}; padding-left: 22px;">
           <div style="margin-bottom:8px;">
             <span style="background:{severity_color}; color:white; padding:3px 9px; border-radius:6px; font-size:11px; font-weight:700; letter-spacing:.04em;">{severity_label}</span>
-            <span style="font-size:11px; color:#6b7280; font-weight:600; margin-left:8px;">UI priority (inferred from text keywords)</span>
           </div>
           <div style="font-size:13px; font-weight:800; color:#374151; letter-spacing:.04em; text-transform:uppercase; margin-bottom:8px;">
             CLINICAL CONFLICT
           </div>
           <div style="font-size:15px; line-height:1.55; color:#1f2937;">
-            <div style="margin-bottom:8px;"><strong>{html_escape(topic)}</strong></div>
-            <div>{html_escape(body)}</div>
+            <div style="margin-bottom:8px;"><strong>{html_escape(_strip_codes(topic))}</strong></div>
+            <div>{html_escape(_strip_codes(body))}</div>
           </div>
         </div>
         """,
@@ -814,11 +1874,10 @@ def _infer_worklist_owner(text: str) -> str:
 
 
 _PRIORITY_COLORS = {
-    # Red is reserved for the single global blocking state
-    # (decision card + Admission Blocked banner). Task priority pills
-    # use amber so red retains its meaning.
-    "High": "#b45309",          # amber
-    "Medium": "#d97706",        # lighter amber
+    # Severity-pill scheme used everywhere in the app:
+    # HIGH → red, MEDIUM → amber, FOLLOW-UP → gray.
+    "High": "#dc2626",          # red
+    "Medium": "#d97706",        # amber
     "Follow-up": "#6b7280",     # gray
 }
 
@@ -1006,17 +2065,28 @@ def _task_header_badges(task: dict, include_priority: bool = True) -> str:
     """Compact badge row used inside an opened task card. Owner chip is
     omitted (owner is already in the group header). Priority pill may
     be suppressed when the surrounding subgroup label (Blocking /
-    Pre-admission) already conveys priority."""
+    Pre-admission) already conveys priority. Risk-gap-derived tasks
+    also surface their gap_NN reference as a muted mono chip so the
+    audit ID never appears inline in the action sentence."""
     parts: list[str] = []
     if include_priority:
         parts.append(_priority_badge(task["priority"]))
     parts.append(_origin_chip(task["source"]))
+    tid = task.get("id", "")
+    if tid.startswith("riskgap_"):
+        try:
+            gap_num = int(tid.split("_", 1)[1])
+            parts.append(_mono_id_chip(f"gap_{gap_num:02d}"))
+        except (ValueError, IndexError):
+            pass
     return "".join(parts)
 
 
 def _task_label(task: dict, include_priority: bool = True) -> str:
-    if include_priority:
-        return f"[{task['priority'].upper()}] {task['action']}"
+    # Severity is shown as a styled chip in the expanded body via
+    # _task_header_badges; the collapsed header keeps a clean action
+    # sentence so no raw [HIGH]/[MED]/[FOLLOW-UP] tags appear in the
+    # user-facing UI.
     return task["action"]
 
 
@@ -1136,13 +2206,7 @@ def _render_task_dispatch(
 def _owner_header(
     owner: str, tasks: list[dict], has_blocking: bool = False
 ) -> str:
-    total = len(tasks)
-    done = sum(1 for t in tasks if _is_task_done(t))
-    open_n = total - done
-    header = f"{owner} ({total} · {done} done · {open_n} open)"
-    if has_blocking:
-        header += " · blocking items"
-    return header
+    return f"{owner} ({len(tasks)})"
 
 
 def _render_open_questions_workstream(
@@ -1188,19 +2252,26 @@ def _render_action_tasks_workstream(
         header = _owner_header(owner, tasks, has_blocking=bool(blocking))
         with st.expander(header, expanded=bool(blocking)):
             if blocking:
-                st.markdown("**Blocking**")
+                st.markdown(
+                    "<div class='ws-subgroup'>Required before "
+                    "move-in</div>",
+                    unsafe_allow_html=True,
+                )
                 for task in blocking:
                     _render_task_dispatch(task, include_priority=False)
             if pre_adm:
-                if blocking:
-                    st.markdown("---")
-                st.markdown("**Pre-admission**")
+                st.markdown(
+                    "<div class='ws-subgroup'>Before the target "
+                    "date</div>",
+                    unsafe_allow_html=True,
+                )
                 for task in pre_adm:
                     _render_task_dispatch(task, include_priority=False)
             if other:
-                if blocking or pre_adm:
-                    st.markdown("---")
-                st.markdown("**Other**")
+                st.markdown(
+                    "<div class='ws-subgroup'>Other</div>",
+                    unsafe_allow_html=True,
+                )
                 for task in other:
                     _render_task_dispatch(task, include_priority=True)
 
@@ -1210,8 +2281,8 @@ def _render_blocker_banner(high_remaining: int) -> None:
         st.markdown(
             f"""
             <div style="background:#991b1b; color:white; padding:16px 20px; border-radius:10px; margin:12px 0;">
-                <div style="font-weight:800; font-size:18px; letter-spacing:.04em;">ADMISSION BLOCKED</div>
-                <div style="font-size:14px; margin-top:6px;">{high_remaining} high-severity blocker{'' if high_remaining == 1 else 's'} remain unresolved.</div>
+                <div style="font-weight:800; font-size:18px; letter-spacing:.04em;">ADMISSION ON HOLD</div>
+                <div style="font-size:14px; margin-top:6px;">{high_remaining} high-severity concern{'' if high_remaining == 1 else 's'} remain unresolved.</div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -1220,7 +2291,7 @@ def _render_blocker_banner(high_remaining: int) -> None:
         st.markdown(
             """
             <div style="background:#2d5f3f; color:white; padding:16px 20px; border-radius:10px; margin:12px 0;">
-                <div style="font-weight:800; font-size:18px; letter-spacing:.04em;">HIGH-RISK BLOCKERS CLEARED</div>
+                <div style="font-weight:800; font-size:18px; letter-spacing:.04em;">Concerns cleared</div>
                 <div style="font-size:14px; margin-top:6px;">No high-severity tasks remain unresolved.</div>
             </div>
             """,
@@ -1268,7 +2339,12 @@ def _render_add_custom_task() -> None:
                         "type": t_type,
                     }
                 )
-                st.session_state.custom_task_text_input = ""
+                # Clear the input by removing its key; Streamlit will
+                # re-init the widget to its default empty value on the
+                # next rerun. Direct assignment to a widget-bound key
+                # after the widget is rendered raises in Streamlit.
+                if "custom_task_text_input" in st.session_state:
+                    del st.session_state["custom_task_text_input"]
                 st.rerun()
 
 
@@ -1283,6 +2359,39 @@ def _wipe_workspace_state() -> None:
 
 
 # ===== Action Plan markdown sectionizer =====
+
+
+_SEVERITY_DOT_COLORS = {
+    "CRITICAL": "#a32c3a",
+    "HIGH": "#a32c3a",
+    "MEDIUM": "#a86610",
+    "MED": "#a86610",
+    "LOW": "#6c6c66",
+    "FOLLOW-UP": "#6c6c66",
+    "FOLLOWUP": "#6c6c66",
+}
+
+
+def _decorate_severity_tokens(md: str) -> str:
+    """Display-only: replace bracketed severity tokens like [HIGH] in
+    the generated-document preview with a small colored dot. The stored
+    draft_action_plan (PDF / markdown export) is untouched."""
+    def _repl(m: "re.Match") -> str:
+        word = m.group(1).upper().replace(" ", "")
+        color = _SEVERITY_DOT_COLORS.get(word, "#6c6c66")
+        pretty = m.group(1).strip().title()
+        return (
+            f"<span title='{pretty}' style='display:inline-block;"
+            f"width:9px;height:9px;border-radius:50%;background:"
+            f"{color};vertical-align:middle;margin-right:7px;'></span>"
+        )
+
+    return re.sub(
+        r"\[(CRITICAL|HIGH|MEDIUM|MED|LOW|FOLLOW[- ]?UP)\]",
+        _repl,
+        md,
+        flags=re.IGNORECASE,
+    )
 
 
 def _parse_action_plan_sections(md: str) -> tuple[str, list[tuple[str, str]]]:
@@ -1307,68 +2416,351 @@ def _parse_action_plan_sections(md: str) -> tuple[str, list[tuple[str, str]]]:
 # ===== Nested per-item renderers (inside the "View …" outer expander) =====
 
 
+def _conf_chip(conf: str) -> str:
+    """Blue clinical-reference chip for a CARE confidence level."""
+    label = (conf or "").strip().lower()
+    pretty = f"{label.title()} confidence" if label else "Confidence —"
+    return (
+        f'<span style="background:#dbeafe; color:#1e40af; padding:3px 9px; '
+        f'border-radius:6px; font-size:12px; font-weight:700; '
+        f'margin-right:6px; display:inline-block;">'
+        f'{html_escape(pretty)}</span>'
+    )
+
+
+def _gap_flag_chip() -> str:
+    return (
+        '<span style="background:#fef3c7; color:#92400e; padding:3px 9px; '
+        'border-radius:6px; font-size:12px; font-weight:700; '
+        'margin-right:6px; display:inline-block;">Gap flagged</span>'
+    )
+
+
+def _composite_chip() -> str:
+    return (
+        '<span style="background:#fef3c7; color:#92400e; padding:3px 9px; '
+        'border-radius:6px; font-size:12px; font-weight:700; '
+        'margin-right:6px; display:inline-block;">'
+        'Composite recommendation</span>'
+    )
+
+
+def _mono_id_chip(text: str) -> str:
+    """Neutral mono chip for a CARE-factor identifier."""
+    return (
+        f'<span style="background:#f3f4f6; color:#374151; padding:3px 9px; '
+        f'border-radius:6px; font-family:monospace; font-size:11px; '
+        f'font-weight:600; margin-right:6px; display:inline-block;">'
+        f'{html_escape(text)}</span>'
+    )
+
+
+def _is_composite_factor(rec: dict) -> bool:
+    wac = (rec.get("wac_citation") or "").strip().lower()
+    if not wac:
+        return True
+    return any(
+        marker in wac
+        for marker in ("no direct", "composite", "not enumerated",
+                       "not separately enumerated")
+    )
+
+
+def _split_wac_citation(text: str) -> tuple[str, str]:
+    """Split 'WAC 388-106-0095: prose' into (code, plain_english).
+    Returns ('', '') when nothing useful can be extracted."""
+    s = (text or "").strip()
+    if not s:
+        return "", ""
+    m = re.match(
+        r"^(WAC\s+[\d\-\.]+)\s*[:\-—]\s*(.+)$", s, re.IGNORECASE
+    )
+    if m:
+        return m.group(1).strip(), m.group(2).strip()
+    if s.lower().startswith("wac"):
+        return s, ""
+    return "", s
+
+
 def _render_acuity_factor_nested(
-    rec: dict, profile: ResidentProfile
+    rec: dict,
+    profile: ResidentProfile,
+    *,
+    suppress_disclosure_warning: bool = False,
 ) -> None:
     name = rec.get("acuity_factor_name", rec.get("acuity_factor_id", "?"))
-    conf = rec.get("confidence", "—")
-    disclosure = (
-        "gap flagged" if rec.get("disclosure_gap_flagged") else "supported"
-    )
-    label = f"{name} · Confidence: {conf} · Disclosure: {disclosure}"
-    with st.expander(label, expanded=False):
-        if rec.get("acuity_factor_id"):
-            st.markdown(f"`{rec['acuity_factor_id']}`")
-        if rec.get("wac_citation"):
-            st.markdown(f"_WAC citation:_ {rec['wac_citation']}")
+    conf = rec.get("confidence", "low")
+    gap_flag = bool(rec.get("disclosure_gap_flagged"))
+    factor_id = (rec.get("acuity_factor_id") or "").strip()
+    composite = _is_composite_factor(rec)
+    wac_code, wac_plain = _split_wac_citation(rec.get("wac_citation") or "")
+
+    with st.expander(name, expanded=False):
+        chips = _conf_chip(conf)
+        if gap_flag:
+            chips += _gap_flag_chip()
+        if composite:
+            chips += _composite_chip()
+        if factor_id:
+            chips += _mono_id_chip(factor_id)
+        st.markdown(chips, unsafe_allow_html=True)
+        if composite:
+            st.caption(
+                "This factor is clinically relevant but not separately "
+                "enumerated in CARE."
+            )
+        if wac_code:
+            st.markdown(f"**{wac_code}**")
+        if wac_plain:
+            st.caption(wac_plain)
         if rec.get("disclosure_support_snippet"):
             st.markdown(
-                f"_Disclosure quote:_ > {rec['disclosure_support_snippet']}"
+                "_Disclosure quote:_ > "
+                f"{rec['disclosure_support_snippet']}"
             )
-        elif rec.get("disclosure_gap_flagged"):
+        elif gap_flag and not suppress_disclosure_warning:
             st.warning(
                 "AFH disclosure does not clearly support this capability."
             )
-        _render_evidence_snippets(
-            profile, rec.get("resident_need_evidence", []) or []
+        _render_evidence_unified(
+            profile,
+            rec.get("resident_need_evidence", []) or [],
+            context_key=f"acuity_{factor_id or name}",
+            inline=True,
         )
 
 
-def _render_risk_gap_nested(gap: dict, profile: ResidentProfile) -> None:
-    sev = gap.get("severity", "low")
-    need = (gap.get("resident_need") or "").strip()
-    preview = need if len(need) <= 120 else need[:120].rstrip() + "…"
-    sev_tag = {"high": "[HIGH]", "medium": "[MED]", "low": "[LOW]"}.get(
-        sev, "[?]"
-    )
-    label = f"{sev_tag} {preview} · gap flagged"
-    with st.expander(label, expanded=False):
+_OPERATOR_VALUE_MAP = {
+    ("DIABETES_TYPE", "type_1"): "Type 1 diabetes",
+    ("DIABETES_TYPE", "type_2"): "Type 2 diabetes",
+    ("INSULIN_USE", "True"): "Insulin in use",
+    ("INSULIN_USE", "False"): "No insulin in use",
+    ("INSULIN_REGIMEN", "sliding_scale"): "Sliding-scale regimen",
+    ("INSULIN_REGIMEN", "basal_bolus"): "Basal-bolus regimen",
+    ("INSULIN_ADMIN", "staff"): "Staff administer insulin",
+    ("INSULIN_ADMIN", "self"): "Resident self-administers insulin",
+    ("INSULIN_ADMIN", "staff/self"): "Staff and resident both involved",
+}
+_OPERATOR_PREFIX_MAP = {
+    "BGM_FREQUENCY": "Blood glucose monitoring frequency reported",
+    "MOBILITY_AID": "Mobility aid reported",
+}
+
+
+def _operator_claim_parts(claim: str) -> tuple[str, str] | None:
+    """Return (node_id, raw_value) parsed from 'operator answer at NODE -> val',
+    or None when the claim is not in that internal format."""
+    m = re.match(r"operator answer at (\w+)\s*->\s*(.+)$", (claim or "").strip())
+    if not m:
+        return None
+    node_id = m.group(1)
+    raw = m.group(2).strip()
+    if len(raw) >= 2 and raw[0] in ("'", '"') and raw[-1] == raw[0]:
+        raw = raw[1:-1]
+    return node_id, raw
+
+
+def _humanize_operator_claim(claim: str) -> str:
+    """Turn 'operator answer at NODE_ID -> value' into a readable phrase."""
+    parts = _operator_claim_parts(claim)
+    if parts is None:
+        return claim or ""
+    node_id, val = parts
+    mapped = _OPERATOR_VALUE_MAP.get((node_id, val))
+    if mapped:
+        return mapped
+    if node_id in _OPERATOR_PREFIX_MAP:
+        return _OPERATOR_PREFIX_MAP[node_id]
+    return val or claim
+
+
+def _parse_mismatch(verbatim: str, raw_value: str, humanized: str) -> bool:
+    """Heuristic: True when the verbatim operator answer shares no
+    substantive token with the system's normalized recording — i.e. a
+    parse may have collapsed or reshaped the answer."""
+    v = (verbatim or "").lower()
+    if not v:
+        return False
+    candidates = [
+        (raw_value or "").replace("_", " ").lower(),
+        (humanized or "").lower(),
+    ]
+    tokens: list[str] = []
+    for c in candidates:
+        tokens.extend(t for t in re.findall(r"[a-z0-9]+", c) if len(t) >= 4)
+    if not tokens:
+        return False
+    return not any(t in v for t in tokens)
+
+
+def _next_ev_ctx_key() -> str:
+    """Per-render counter used to give evidence-chip buttons unique keys
+    when the unified evidence renderer is called multiple times in one
+    Streamlit run. Reset at the top of synthesis_done."""
+    n = int(st.session_state.get("_ev_ctx_seq", 0)) + 1
+    st.session_state["_ev_ctx_seq"] = n
+    return f"ctx{n}"
+
+
+_SEMANTIC_CHIP_CSS = (
+    "background:#eef2ff; color:#3730a3; padding:3px 9px; "
+    "border-radius:999px; font-size:11px; font-weight:700; "
+    "margin-right:6px; display:inline-block;"
+)
+
+
+def _render_evidence_unified(
+    profile: ResidentProfile,
+    snippet_ids: list[str],
+    *,
+    context_key: str | None = None,
+    label: str | None = None,
+    inline: bool = False,
+) -> None:
+    """Single shared evidence renderer for Care Plan, CARE Factors,
+    Capability Gaps, and the Sources & Debug audit views.
+
+    Behavior:
+      • Each operator snippet is humanized via _humanize_operator_claim
+        so backend strings like "operator answer at NODE -> 'val'" never
+        reach the user-facing UI.
+      • When the operator's raw answer differs materially from what the
+        pipeline normalized, an inline "Needs confirmation" warning is
+        shown with both sides.
+      • Each snippet ID renders as a clickable chip that sets a
+        session-state filter Sources & Debug honors.
+
+    When the caller is itself inside an expander (e.g. a CARE-factor
+    card), pass inline=True to avoid nesting accordions.
+    """
+    if not snippet_ids:
+        return
+    ctx = context_key or _next_ev_ctx_key()
+    by_id = {s.snippet_id: s for s in profile.evidence_snippets}
+    exp_label = label or f"Evidence ({len(snippet_ids)})"
+    if inline:
+        st.markdown(f"**{exp_label}**")
+        body = st.container()
+    else:
+        body = st.expander(exp_label, expanded=False)
+    with body:
         st.markdown(
-            severity_badge(sev) + f" **{need}**",
+            "<div style='font-size:11px; color:var(--text-muted); "
+            "margin-bottom:6px;'>Evidence IDs trace each statement to "
+            "its source — <b>S</b> clinical record · <b>F</b> family "
+            "notes · <b>OP</b> operator interview answer. Click an ID "
+            "to inspect it.</div>",
             unsafe_allow_html=True,
         )
+        for sid in snippet_ids:
+            snip = by_id.get(sid)
+            if snip is None:
+                st.markdown(f"- `{sid}` — _(not in current profile)_")
+                continue
+            chip_col, body_col = st.columns(
+                [1, 6],
+                gap="small",
+                vertical_alignment="center",
+            )
+            with chip_col:
+                if st.button(
+                    sid,
+                    key=f"ev_chip_{ctx}_{sid}",
+                    help="Open Sources & Debug filtered to this snippet",
+                    use_container_width=True,
+                ):
+                    st.session_state["evidence_filter_snippet_id"] = sid
+                    st.session_state["focus_sources_tab"] = True
+                    st.rerun()
+            with body_col:
+                if snip.source == "operator":
+                    parts = _operator_claim_parts(snip.claim)
+                    if parts is None:
+                        st.markdown(
+                            f"**Operator:** {snip.verbatim_text}"
+                        )
+                    else:
+                        node_id, raw_value = parts
+                        display = _humanize_operator_claim(snip.claim)
+                        st.markdown(f"**Operator:** {display}")
+                        if _parse_mismatch(
+                            snip.verbatim_text, raw_value, display
+                        ):
+                            st.warning(
+                                f"Needs confirmation — Operator said: "
+                                f"{snip.verbatim_text}  ·  System "
+                                f"recorded: "
+                                f"{raw_value.replace('_', ' ')}"
+                            )
+                elif snip.source == "discharge":
+                    st.markdown(
+                        f"**Clinical record:** {snip.verbatim_text}"
+                    )
+                elif snip.source == "family":
+                    st.markdown(f"**Family:** {snip.verbatim_text}")
+                else:
+                    st.markdown(
+                        f"**{snip.source.title()}:** {snip.verbatim_text}"
+                    )
+
+
+def _format_suggested_action(text: str) -> None:
+    """Render suggested_next_action; split (1)(2)(3)-style clauses into a
+    numbered list. Otherwise render as a paragraph."""
+    s = (text or "").strip()
+    if not s:
+        return
+    parts = re.split(r"\s*\(\d+\)\s*", s)
+    if len(parts) > 1:
+        intro = parts[0].strip()
+        items = [p.strip() for p in parts[1:] if p.strip()]
+        if items:
+            if intro:
+                st.write(intro)
+            for i, item in enumerate(items, 1):
+                st.markdown(f"{i}. {item}")
+            return
+    st.write(s)
+
+
+def _render_risk_evidence_snippets(
+    profile: ResidentProfile, snippet_ids: list[str], context_key: str | None = None,
+) -> None:
+    """Thin wrapper kept for back-compat; routes through the unified
+    evidence renderer."""
+    _render_evidence_unified(
+        profile, snippet_ids, context_key=context_key
+    )
+
+
+def _render_risk_gap_nested(
+    gap: dict, profile: ResidentProfile, index: int
+) -> None:
+    sev = gap.get("severity", "low")
+    need = (gap.get("resident_need") or "").strip()
+    with st.expander(_clip_label(need) or "Capability gap",
+                     expanded=False):
+        st.markdown(severity_badge(sev), unsafe_allow_html=True)
         missing = (gap.get("missing_or_weak_support") or "").strip()
         if missing:
-            if sev == "high":
-                st.error(missing)
-            elif sev == "medium":
-                st.warning(missing)
-            else:
-                st.info(missing)
-        if gap.get("disclosure_quote"):
+            _render_prose(missing, label="The concern")
+        action = (gap.get("suggested_next_action") or "").strip()
+        if action:
             st.markdown(
-                f"_Disclosure quote:_ > {gap['disclosure_quote']}"
+                "<div style='font-size:12px;font-weight:700;"
+                "text-transform:uppercase;letter-spacing:0.06em;"
+                "color:var(--text-muted);margin:4px 0 6px 0;'>"
+                "Recommended next step</div>",
+                unsafe_allow_html=True,
             )
-        else:
-            st.markdown(
-                "_Disclosure quote:_ _(disclosure silent on this need)_"
-            )
-        if gap.get("suggested_next_action"):
-            st.markdown(
-                f"_Suggested next action:_ {gap['suggested_next_action']}"
-            )
-        _render_evidence_snippets(
+            _format_suggested_action(action)
+        _render_risk_evidence_snippets(
             profile, gap.get("evidence_snippet_ids", []) or []
+        )
+        st.caption(
+            "Related tasks are tracked in the Action Plan tab. "
+            f"Audit reference: gap_{index:02d} "
+            "(this gap's ID in the capability-gap register)."
         )
 for _k, _v in DEFAULT_STATE.items():
     st.session_state.setdefault(_k, _v)
@@ -1390,19 +2782,10 @@ def _read_pdf(uploaded_file) -> str:
 
 
 def _render_evidence_snippets(profile: ResidentProfile, snippet_ids: list[str]):
-    if not snippet_ids:
-        return
-    by_id = {s.snippet_id: s for s in profile.evidence_snippets}
-    with st.expander(f"Evidence ({len(snippet_ids)})", expanded=False):
-        for sid in snippet_ids:
-            snip = by_id.get(sid)
-            if snip is None:
-                st.markdown(f"- `{sid}` — _(not in staged-pipeline profile)_")
-                continue
-            st.markdown(
-                f"- **`{sid}`** _(source: {snip.source})_ — {snip.claim}"
-            )
-            st.markdown(f"  > {snip.verbatim_text}")
+    """Legacy shim — every caller now routes through the unified
+    renderer, which humanizes operator claims and renders clickable
+    snippet-id chips."""
+    _render_evidence_unified(profile, snippet_ids)
 
 
 def _render_care_plan(plan: dict, profile: ResidentProfile):
@@ -1423,7 +2806,7 @@ def _render_care_plan(plan: dict, profile: ResidentProfile):
         st.markdown(f"**{title}**")
         for i, item in enumerate(items, 1):
             st.markdown(f"{i}. {item['recommendation']}")
-            st.caption(f"Rationale: {item['rationale']}")
+            _render_prose(item["rationale"], label="Rationale")
             _render_evidence_snippets(profile, item.get("evidence_snippet_ids", []))
     if plan.get("unresolved_disagreements"):
         st.markdown("**Unresolved disagreements**")
@@ -1504,10 +2887,9 @@ def render_info_card(
 
 
 def severity_badge(level: str) -> str:
-    # Task/gap severity uses amber/gray; red is reserved for the single
-    # global blocking-state banner.
+    # Severity-pill scheme: HIGH → red, MEDIUM → amber, LOW → gray.
     colors = {
-        "high": ("#b45309", "white"),
+        "high": ("#dc2626", "white"),
         "medium": ("#d97706", "white"),
         "low": ("#6b7280", "white"),
     }
@@ -1580,7 +2962,7 @@ def _preview_text(text: str, n: int = 70) -> str:
 
 
 _SOURCE_LABELS = {
-    "discharge": "Discharge evidence",
+    "discharge": "Clinical record",
     "family": "Family note",
     "operator": "Operator answer",
 }
@@ -1599,7 +2981,7 @@ def _evidence_label(
     ref_suffix = f"{n_refs} ref{'' if n_refs == 1 else 's'}"
     label = f"{snippet.snippet_id} · {middle} · {ref_suffix}"
     if is_high_gap:
-        label += " · HIGH-GAP EVIDENCE"
+        label += " · linked to a high-severity gap"
     return label
 
 
@@ -1631,16 +3013,15 @@ def _render_evidence_provenance_map(
     Summary line + legend → filter row (source / reference type / high-
     gap toggle) → coverage line → filtered snippets grouped by source
     (compact collapsed rows) → unreferenced section with explanation.
-    Reference-finding logic unchanged.
+    Reference-finding logic unchanged. The caller is expected to wrap
+    this in a single expander so we don't double-nest accordions.
     """
-    with st.expander("🔍 View Evidence Provenance Map", expanded=False):
-        render_info_card(
-            "Evidence Map",
+    with st.container():
+        st.caption(
             "Every claim in the artifacts traces back to a verbatim "
             "source quote. Use the filters below to narrow the view; "
             "expand any snippet for full text and the artifacts that "
-            "cite it.",
-            accent="#0f766e",
+            "cite it."
         )
         snippets = profile.evidence_snippets
 
@@ -1682,7 +3063,7 @@ def _render_evidence_provenance_map(
         with col_src:
             source_filter = st.selectbox(
                 "Source",
-                ["All", "Discharge", "Family", "Operator"],
+                ["All", "Clinical record", "Family", "Operator"],
                 key="ev_filter_source",
             )
         with col_ref:
@@ -1713,16 +3094,18 @@ def _render_evidence_provenance_map(
             1 for s in snippets if s.source == "operator"
         )
         st.caption(
-            f"Coverage: Discharge {discharge_count} · Family "
+            f"Coverage: Clinical record {discharge_count} · Family "
             f"{family_count} · Operator {operator_count} · Total {total}"
         )
 
         # Filter application.
         def _matches(s, refs: list[str]) -> bool:
-            if (
-                source_filter != "All"
-                and s.source != source_filter.lower()
-            ):
+            _src_key = {
+                "Clinical record": "discharge",
+                "Family": "family",
+                "Operator": "operator",
+            }.get(source_filter, source_filter.lower())
+            if source_filter != "All" and s.source != _src_key:
                 return False
             if ref_filter == "Risk gaps only" and not any(
                 r.startswith("Risk Register") for r in refs
@@ -1775,7 +3158,7 @@ def _render_evidence_provenance_map(
 
         # Referenced snippets grouped by source.
         source_meta = [
-            ("discharge", "Discharge summary evidence"),
+            ("discharge", "Clinical record evidence"),
             ("family", "Family notes evidence"),
             ("operator", "Operator interview evidence"),
         ]
@@ -1852,15 +3235,104 @@ def _render_risk_register(reg: dict, profile: ResidentProfile):
 # ===== Sidebar =====
 
 with st.sidebar:
-    st.header("Settings")
-    compare_baseline = st.toggle(
-        "Compare against baseline",
-        value=False,
-        help=(
-            "Run the single-call baseline on the same inputs and show "
-            "side-by-side with the staged pipeline once artifacts are ready."
-        ),
+    st.markdown(
+        "<div style='font-size:18px; font-weight:700; "
+        "color:#111827; margin-bottom:6px;'>Workspace</div>",
+        unsafe_allow_html=True,
     )
+    _stage_help = {
+        "input": (
+            "Paste the patient's clinical record, family notes, and "
+            "(recommended) the AFH disclosure. Stage 1 extracts the "
+            "structured profile."
+        ),
+        "profile_review": (
+            "Review what Stage 1 pulled. Continue to start the "
+            "condition-specific interview."
+        ),
+        "interview": (
+            "Answer each question to confirm or fill gaps in the "
+            "extracted profile. You can use Ask later for unknowns."
+        ),
+        "synthesis_ready": (
+            "Generate the care plan, acuity factors, risk register and "
+            "intake decision in a single batch."
+        ),
+        "synthesis_done": (
+            "Review the verdict and work through the concerns to "
+            "address. Acknowledge to start working the Action Plan."
+        ),
+    }
+    st.caption(
+        _stage_help.get(
+            st.session_state.get("stage", "input"),
+            "",
+        )
+    )
+    with st.expander("Developer tools", expanded=False):
+        compare_baseline = st.toggle(
+            "Compare against baseline",
+            value=False,
+            help=(
+                "Run the single-call baseline on the same inputs and "
+                "show side-by-side with the staged pipeline once "
+                "artifacts are ready."
+            ),
+        )
+
+    if (
+        st.session_state.stage == "interview"
+        and _has_active_interview_question(
+            st.session_state.get("session")
+        )
+    ):
+        st.divider()
+        st.subheader("Captured so far")
+        _session = st.session_state.session
+        _profile = st.session_state.profile
+        _op_snips = [
+            s for s in _profile.evidence_snippets if s.source == "operator"
+        ]
+        st.caption(f"Operator evidence snippets: {len(_op_snips)}")
+        _current_tree_id = _session.trees[_session.current_tree_idx]["tree_id"]
+        _section = _NODE_SECTION.get(
+            (_session.get_next_question() or {}).get("node_id"), ""
+        )
+        _section_label = (
+            f"{_TREE_PRETTY.get(_current_tree_id, _current_tree_id)}"
+            + (f" → {_section}" if _section else "")
+        )
+        st.caption(f"Current section: {_section_label}")
+        st.caption(
+            "Triggered conditions: "
+            + (
+                ", ".join(
+                    _TREE_PRETTY.get(c, c)
+                    for c in st.session_state.triggered_conditions
+                )
+                or "(none)"
+            )
+        )
+        if _op_snips:
+            st.markdown("**Last 5 operator answers**")
+            for _s in _op_snips[-5:][::-1]:
+                parts = _operator_claim_parts(_s.claim)
+                if parts is None:
+                    fallback = (
+                        _s.verbatim_text
+                        or _humanize_operator_claim(_s.claim)
+                    )
+                    st.markdown(f"- Operator answer: {fallback}")
+                    continue
+                _nid, _raw = parts
+                _label = _NODE_LABEL_HUMAN.get(_nid)
+                _value = _humanize_option_value(_raw)
+                if _label:
+                    st.markdown(f"- **{_label}:** {_value}")
+                else:
+                    st.markdown(f"- Operator answer: {_value}")
+        with st.expander("Full profile JSON", expanded=False):
+            st.json(_profile.model_dump(exclude_none=True))
 
     st.divider()
     if st.button("Reset session"):
@@ -1877,52 +3349,145 @@ stage = st.session_state.stage
 # --- Stage: input ---
 
 if stage == "input":
-    st.header("1. Inputs")
-    col1, col2 = st.columns(2)
-    with col1:
-        discharge = st.text_area(
-            "Discharge summary",
-            height=260,
-            placeholder="Paste the hospital discharge summary here",
-        )
-    with col2:
-        family = st.text_area(
-            "Family-reported notes",
-            height=260,
-            placeholder="Paste family-reported observations here",
-        )
+    _hour = datetime.now().hour
+    if _hour < 12:
+        _greet = "Good morning"
+    elif _hour < 18:
+        _greet = "Good afternoon"
+    else:
+        _greet = "Good evening"
+    st.markdown(
+        f"<div class='t-headline'>{_greet} — let's start a "
+        "new intake</div>"
+        "<div class='t-body' style='margin: 8px 0 24px 0; "
+        "max-width: 620px;'>"
+        "Provide the patient's clinical record and family notes to "
+        "begin. The AFH disclosure is recommended so the "
+        "capability-gap analysis can anchor to disclosure language."
+        "</div>",
+        unsafe_allow_html=True,
+    )
 
-    disclosure = st.text_area(
-        "AFH disclosure of services",
-        height=200,
-        placeholder=(
-            "Paste the AFH disclosure here, or upload a .txt or .pdf below"
-        ),
-    )
-    upload = st.file_uploader(
-        "Optional: upload disclosure as .txt or .pdf",
-        type=["txt", "pdf"],
-    )
-    if upload is not None:
+    def _load_upload_text(upload):
+        """Return (text, size_bytes, error_str). On failure, text is ''."""
+        if upload is None:
+            return "", 0, None
         try:
+            size_bytes = int(getattr(upload, "size", 0) or 0)
             if upload.name.lower().endswith(".pdf"):
-                disclosure = _read_pdf(upload)
+                text = _read_pdf(upload)
             else:
-                disclosure = upload.read().decode("utf-8", errors="replace")
-            st.success(
-                f"Loaded {len(disclosure):,} characters from {upload.name}"
-            )
+                text = upload.read().decode("utf-8", errors="replace")
+            return text, size_bytes, None
         except Exception as exc:
-            st.error(f"Could not read uploaded file: {exc}")
+            return "", 0, str(exc)
 
-    can_start = bool(discharge and family)
-    if st.button("Start Intake", type="primary", disabled=not can_start):
-        with st.spinner("Running Stage 1 extraction..."):
-            profile, triggered = run_initial_extraction(
-                discharge_summary=discharge,
-                family_notes=family,
-                disclosure_text=disclosure,
+    def _resolve_input_field(text_value, upload):
+        """Return the final text the pipeline should consume. If an upload
+        is present, its extracted text wins and we render either a weak-
+        extraction warning or a confirmation. Falls back to the textarea."""
+        if upload is None:
+            return text_value
+        loaded, size_bytes, err = _load_upload_text(upload)
+        if err is not None:
+            st.error(f"Could not read uploaded file: {err}")
+            return text_value
+        if len(loaded) < 100 and size_bytes > 100 * 1024:
+            st.warning(
+                f"Only {len(loaded)} characters were extracted from this "
+                "file. It may be scanned or image-based. Paste text "
+                "manually or run OCR before continuing."
             )
+        else:
+            st.info("Uploaded file text loaded into this field.")
+        return loaded
+
+    st.markdown(
+        "**Clinical record** "
+        "<span style='background:#a3262e;color:white;padding:2px 8px;"
+        "border-radius:4px;font-size:11px;font-weight:600;letter-spacing:"
+        ".06em;margin-left:6px;'>REQUIRED</span>"
+        "<br><span style='font-size:12px;color:var(--text-muted);'>"
+        "Discharge summary, H&amp;P, or current provider notes — "
+        "whatever clinical documentation you have.</span>",
+        unsafe_allow_html=True,
+    )
+    discharge_text = st.text_area(
+        "Clinical record text",
+        height=220,
+        key="input_discharge_text",
+        label_visibility="collapsed",
+    )
+    discharge_upload = st.file_uploader(
+        "Upload .txt / .pdf",
+        type=["txt", "pdf"],
+        key="input_discharge_upload",
+    )
+    discharge = _resolve_input_field(discharge_text, discharge_upload)
+
+    st.markdown(
+        "**Family notes** "
+        "<span style='background:#a3262e;color:white;padding:2px 8px;"
+        "border-radius:4px;font-size:11px;font-weight:600;letter-spacing:"
+        ".06em;margin-left:6px;'>REQUIRED</span>",
+        unsafe_allow_html=True,
+    )
+    family_text = st.text_area(
+        "Family notes text",
+        height=200,
+        key="input_family_text",
+        label_visibility="collapsed",
+    )
+    family_upload = st.file_uploader(
+        "Upload .txt / .pdf",
+        type=["txt", "pdf"],
+        key="input_family_upload",
+    )
+    family = _resolve_input_field(family_text, family_upload)
+
+    st.markdown(
+        "**AFH Disclosure of Services** "
+        "<span style='background:#a86610;color:white;padding:2px 8px;"
+        "border-radius:4px;font-size:11px;font-weight:600;letter-spacing:"
+        ".06em;margin-left:6px;'>RECOMMENDED</span>",
+        unsafe_allow_html=True,
+    )
+    disclosure_text = st.text_area(
+        "Disclosure text",
+        height=180,
+        key="input_disclosure_text",
+        label_visibility="collapsed",
+    )
+    disclosure_upload = st.file_uploader(
+        "Upload disclosure (.txt / .pdf)",
+        type=["txt", "pdf"],
+        key="input_disclosure_upload",
+    )
+    disclosure = _resolve_input_field(disclosure_text, disclosure_upload)
+
+    can_start = bool((discharge or "").strip() and (family or "").strip())
+    if st.button(
+        "Start Intake",
+        type="primary",
+        disabled=not can_start,
+        key="start_intake_btn",
+    ):
+        try:
+            with st.spinner(
+                "Reading the documents and pulling structured fields…"
+            ):
+                profile, triggered = run_initial_extraction(
+                    discharge_summary=discharge,
+                    family_notes=family,
+                    disclosure_text=disclosure,
+                )
+        except Exception as exc:
+            st.error(
+                "Stage 1 extraction failed. The model call returned an "
+                "error. You can retry by clicking Start Intake again."
+            )
+            st.caption(f"Details: {exc}")
+            st.stop()
         st.session_state.profile = profile
         st.session_state.triggered_conditions = triggered
         st.session_state.source_docs = {
@@ -1935,13 +3500,16 @@ if stage == "input":
                 profile=profile, triggered_conditions=triggered
             )
             st.session_state.session = session
+            # Fresh per-session Back-history (never the shared
+            # DEFAULT_STATE list, so a reset starts truly empty).
+            st.session_state.interview_history = []
             # Y for interview progress: sum of all nodes across triggered
             # trees, computed ONCE at interview start so the progress bar
             # never moves backward as branching skips nodes.
             st.session_state.interview_total_nodes = sum(
                 len(t["nodes"]) for t in session.trees
             )
-            st.session_state.stage = "interview"
+            st.session_state.stage = "profile_review"
         else:
             st.info(
                 "Stage 1 flagged no conditions for interview; jumping to synthesis."
@@ -1950,16 +3518,155 @@ if stage == "input":
         st.rerun()
 
 
+# --- Stage: profile_review ---
+
+elif stage == "profile_review":
+    st.markdown(
+        "<div class='t-headline'>Confirm what we extracted</div>"
+        "<div class='t-body' style='margin: 8px 0 24px 0; "
+        "max-width: 620px;'>"
+        "Stage 1 pulled the structured profile below from your "
+        "documents. Review it, then continue to the condition-specific "
+        "interview."
+        "</div>",
+        unsafe_allow_html=True,
+    )
+    profile = st.session_state.profile
+    triggered = st.session_state.triggered_conditions
+
+    op_count = sum(
+        1 for s in profile.evidence_snippets if s.source == "operator"
+    )
+    nonop_count = len(profile.evidence_snippets) - op_count
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Triggered conditions", len(triggered))
+    c2.metric("Evidence snippets", nonop_count)
+    c3.metric("Source disagreements", len(profile.source_disagreements))
+
+    st.markdown("**Triggered conditions**")
+    if triggered:
+        st.write(
+            ", ".join(_TREE_PRETTY.get(c, c) for c in triggered)
+        )
+    else:
+        st.write("(none)")
+
+    st.markdown("**Key extracted fields**")
+    rows: list[tuple[str, str]] = []
+    if profile.diabetes is not None:
+        dtype = getattr(profile.diabetes, "type", None)
+        if dtype:
+            rows.append(
+                ("Diabetes type", _humanize_option_value(str(dtype)))
+            )
+        insulin = getattr(
+            getattr(profile.diabetes, "insulin", None), "uses", None
+        )
+        if insulin is not None:
+            rows.append(("Insulin use", "Yes" if insulin else "No"))
+    if profile.fall_risk is not None:
+        falls = getattr(
+            getattr(profile.fall_risk, "history_6mo", None),
+            "any_falls",
+            None,
+        )
+        if falls is not None:
+            rows.append(
+                ("Fall history (6mo)", "Yes" if falls else "No")
+            )
+        aid = getattr(profile.fall_risk, "assistive_device", None)
+        if aid:
+            rows.append(
+                ("Mobility aid", _humanize_option_value(str(aid)))
+            )
+    if profile.dementia is not None:
+        dx = getattr(profile.dementia, "diagnosis_status", None)
+        if dx:
+            rows.append(
+                (
+                    "Dementia diagnosis",
+                    _humanize_option_value(str(dx)),
+                )
+            )
+        stage_v = getattr(profile.dementia, "stage", None)
+        if stage_v:
+            rows.append(
+                ("Dementia stage", _humanize_option_value(str(stage_v)))
+            )
+    adl = profile.adl_status
+    adl_dep: list[str] = []
+    if adl is not None:
+        for f in (
+            "bathing",
+            "dressing",
+            "toilet_use",
+            "transfers",
+            "eating",
+        ):
+            v = getattr(adl, f, None)
+            if v and str(v).lower() not in ("independent", "unknown"):
+                adl_dep.append(f.replace("_", " "))
+        if adl_dep:
+            rows.append(("ADL support needed", ", ".join(adl_dep)))
+        else:
+            rows.append(
+                ("ADL status", "Independent or unknown across ADLs")
+            )
+
+    if rows:
+        for label, value in rows:
+            st.markdown(f"- **{label}:** {value}")
+    else:
+        st.caption("No structured fields extracted yet.")
+
+    st.info(
+        "Interview will ask only the condition-specific follow-up "
+        "questions needed to confirm or fill gaps."
+    )
+
+    col_a, col_b = st.columns([1, 4])
+    with col_a:
+        if st.button("Continue to Interview", type="primary"):
+            st.session_state.stage = "interview"
+            st.rerun()
+    with col_b:
+        if st.button("← Edit source documents"):
+            st.session_state.stage = "input"
+            st.rerun()
+
+
 # --- Stage: interview ---
 
 elif stage == "interview":
     session = st.session_state.session
-    node = session.get_next_question()
-    if node is None:
-        st.session_state.stage = "synthesis_ready"
-        st.rerun()
+    if not _has_active_interview_question(session):
+        # Either the operator just answered the last question (current
+        # tree index has advanced past the end) or the session was reset
+        # / never created. The first case is a normal completion; the
+        # second needs an explicit operator decision.
+        if session is not None and getattr(session, "trees", None):
+            st.session_state.stage = "synthesis_ready"
+            st.rerun()
+        st.warning(
+            "Interview session ended or became invalid. Continue to "
+            "artifact generation or reset session."
+        )
+        cols = st.columns(2)
+        with cols[0]:
+            if st.button("Continue", key="interview_fallback_continue"):
+                st.session_state.stage = "synthesis_ready"
+                st.rerun()
+        with cols[1]:
+            if st.button(
+                "Reset session", key="interview_fallback_reset"
+            ):
+                for _k in list(st.session_state.keys()):
+                    del st.session_state[_k]
+                st.rerun()
+        st.stop()
 
-    st.header("2. Interview")
+    node = session.get_next_question()
 
     # Stable progress: Y fixed at session start; X = answered + 1.
     y_total = st.session_state.interview_total_nodes
@@ -1971,71 +3678,355 @@ elif stage == "interview":
     breadcrumb = (
         f"{tree_pretty} → {section}" if section else tree_pretty
     )
-    minutes_remaining = round((y_total - x_current) * 30 / 60)
+    minutes_remaining = max(round((y_total - x_current) * 30 / 60), 0)
 
-    st.markdown(f"**{breadcrumb}**")
-    st.caption(
-        f"Question {x_current} of up to {y_total} · "
-        f"~{minutes_remaining} minutes remaining"
-    )
-    st.progress(min(x_current / y_total, 1.0) if y_total else 0.0)
-
-    st.subheader(node["question_text"])
-    if node.get("context_hint"):
-        with st.expander("Context"):
-            st.write(node["context_hint"])
-    if node["expected_answer_shape"] == "enum" and node.get("answer_options"):
+    with st.container(border=True):
+        st.markdown(
+            f"**Question {x_current} of up to {y_total}**"
+        )
+        st.markdown(f"Section: {breadcrumb}")
         st.caption(
-            "Suggested values: " + ", ".join(node["answer_options"])
+            f"Estimated time remaining: ~{minutes_remaining} minute"
+            f"{'' if minutes_remaining == 1 else 's'}"
         )
+        st.progress(min(x_current / y_total, 1.0) if y_total else 0.0)
+        if not st.session_state.get("_interview_up_to_explained"):
+            st.caption(
+                "Question count may shorten depending on answers."
+            )
+            st.session_state._interview_up_to_explained = True
 
-    with st.form(key=f"answer_form_{tree_id}_{node['node_id']}"):
-        answer = st.text_area(
-            "Operator answer",
-            height=120,
-            key=f"ans_{tree_id}_{node['node_id']}",
-        )
-        submitted = st.form_submit_button("Submit Answer", type="primary")
-    if submitted:
-        if not answer.strip():
-            st.warning("Please enter an answer.")
-        else:
+    # Back navigation — restore the snapshot taken before the last
+    # answer so the operator can change a prior response.
+    _history = st.session_state.get("interview_history") or []
+    if _history:
+        back_col, _ = st.columns([1, 4])
+        with back_col:
+            if st.button(
+                "← Back",
+                key="interview_back_btn",
+                use_container_width=True,
+            ):
+                _restore_session(st.session_state.interview_history.pop())
+                st.rerun()
+
+    # Friendly milestone callouts so the operator feels momentum.
+    if y_total:
+        _ratio = x_current / y_total
+        if x_current == y_total:
+            st.markdown(
+                "<div class='milestone'>🎯 Last question — you're "
+                "almost there.</div>",
+                unsafe_allow_html=True,
+            )
+        elif x_current > 1 and 0.45 <= _ratio <= 0.55:
+            st.markdown(
+                "<div class='milestone'>🚀 Halfway through the "
+                "interview.</div>",
+                unsafe_allow_html=True,
+            )
+
+    question_label = _QUESTION_TEXT_OVERRIDES.get(
+        node["node_id"], node["question_text"]
+    )
+    st.markdown(
+        f"<div class='interview-q'>{html_escape(question_label)}</div>",
+        unsafe_allow_html=True,
+    )
+    if node.get("context_hint"):
+        with st.expander("Context", expanded=False):
+            st.write(node["context_hint"])
+
+    shape = node["expected_answer_shape"]
+    options = node.get("answer_options") or []
+    node_id = node["node_id"]
+
+    def _submit(value: str) -> None:
+        # Snapshot the pre-answer state so the operator can step Back.
+        snap = _snapshot_session(session)
+        try:
             with st.spinner("Parsing answer..."):
-                session.submit_answer(answer)
-            st.rerun()
+                session.submit_answer(value)
+        except Exception as exc:
+            st.error(
+                "Could not parse that answer. The model call failed; "
+                "please try a different phrasing or use Ask later."
+            )
+            st.caption(f"Details: {exc}")
+            return
+        st.session_state.interview_history.append(snap)
+        st.rerun()
+
+    btn_key_base = f"{tree_id}_{node_id}"
+
+    if node_id == "MEDS_FALL_RISK_CATEGORIES":
+        st.caption("Select all that apply, or choose None.")
+        selected = st.multiselect(
+            "Categories",
+            options=_FRID_CATEGORY_OPTIONS,
+            key=f"frid_select_{btn_key_base}",
+            label_visibility="collapsed",
+        )
+        other_detail = ""
+        if "Other" in selected:
+            other_detail = st.text_input(
+                "Describe 'Other' category",
+                key=f"frid_other_{btn_key_base}",
+            )
+        none_with_others = (
+            "None" in selected and len(selected) > 1
+        )
+        if none_with_others:
+            st.warning(
+                "'None' cannot be combined with medication categories. "
+                "Submit only 'None' or remove it before continuing."
+            )
+        if st.button(
+            "Submit categories",
+            type="primary",
+            key=f"frid_submit_{btn_key_base}",
+            use_container_width=True,
+        ):
+            if not selected:
+                st.warning("Pick at least one category, or choose None.")
+            elif none_with_others:
+                st.warning(
+                    "Remove 'None' or remove the other categories."
+                )
+            else:
+                parts = []
+                for p in selected:
+                    if p == "Other" and other_detail.strip():
+                        parts.append(f"Other: {other_detail.strip()}")
+                    else:
+                        parts.append(p)
+                _submit(", ".join(parts))
+    elif node_id in _MULTISELECT_ENUM_NODES and shape == "enum" and options:
+        st.caption("Check all that apply.")
+        _ovr = _MULTISELECT_OPTION_OVERRIDES.get(node_id, {})
+        _remove = _ovr.get("remove", set())
+        _opts = [o for o in options if o not in _remove]
+        for _extra in _ovr.get("add", []):
+            if _extra not in _opts:
+                _opts.append(_extra)
+        # Keep "unknown" as the last choice.
+        if "unknown" in _opts:
+            _opts = [o for o in _opts if o != "unknown"] + ["unknown"]
+        picked: list[str] = []
+        for opt in _opts:
+            if st.checkbox(
+                _humanize_option_value(opt),
+                key=f"chk_{btn_key_base}_{opt}",
+            ):
+                picked.append(opt)
+        if st.button(
+            "Submit selection",
+            type="primary",
+            key=f"multi_submit_{btn_key_base}",
+            use_container_width=True,
+        ):
+            if not picked:
+                st.warning("Check at least one option.")
+            else:
+                _submit(
+                    picked[0]
+                    if len(picked) == 1
+                    else ", ".join(picked)
+                )
+    elif shape == "enum" and options:
+        cols = st.columns(min(len(options), 4))
+        for i, opt in enumerate(options):
+            col = cols[i % len(cols)]
+            if col.button(
+                _humanize_option_value(opt),
+                key=f"enum_{btn_key_base}_{opt}",
+                use_container_width=True,
+                type="primary",
+            ):
+                _submit(opt)
+    elif shape == "boolean":
+        b1, b2, b3 = st.columns(3)
+        if b1.button(
+            "Yes",
+            key=f"bool_yes_{btn_key_base}",
+            use_container_width=True,
+            type="primary",
+        ):
+            _submit("yes")
+        if b2.button(
+            "No",
+            key=f"bool_no_{btn_key_base}",
+            use_container_width=True,
+            type="primary",
+        ):
+            _submit("no")
+        if b3.button(
+            "Unknown / Not sure",
+            key=f"bool_unk_{btn_key_base}",
+            use_container_width=True,
+        ):
+            _submit("unknown")
+    elif shape in ("numeric", "numeric_or_null"):
+        num_col, btn_col = st.columns([3, 1])
+        with num_col:
+            num_val = st.number_input(
+                "Numeric answer",
+                value=None,
+                step=1.0,
+                key=f"num_{btn_key_base}",
+                label_visibility="collapsed",
+                placeholder="Enter a number",
+            )
+        with btn_col:
+            if st.button(
+                "Submit",
+                key=f"num_submit_{btn_key_base}",
+                type="primary",
+                use_container_width=True,
+            ):
+                if num_val is None:
+                    st.warning("Enter a number, or use Unknown below.")
+                else:
+                    val_str = (
+                        str(int(num_val))
+                        if float(num_val).is_integer()
+                        else str(num_val)
+                    )
+                    _submit(val_str)
+        if shape == "numeric_or_null":
+            if st.button(
+                "Unknown",
+                key=f"num_unk_{btn_key_base}",
+            ):
+                _submit("unknown")
+
+    # Free-text fallback: collapsed by default for structured shapes so
+    # the buttons stay the visual focus. Always expanded for freetext.
+    free_default_open = shape == "freetext"
+    detail_label = (
+        "Operator answer"
+        if free_default_open
+        else "Add detail"
+    )
+    with st.expander(detail_label, expanded=free_default_open):
+        with st.form(key=f"answer_form_{btn_key_base}"):
+            answer = st.text_area(
+                "Operator answer",
+                height=110 if free_default_open else 80,
+                key=f"ans_{btn_key_base}",
+                label_visibility="collapsed",
+            )
+            sub_cols = st.columns([1, 1, 4])
+            with sub_cols[0]:
+                submitted = st.form_submit_button(
+                    "Submit Answer", type="primary"
+                )
+            with sub_cols[1]:
+                ask_later = st.form_submit_button("Ask later")
+        if submitted:
+            if not answer.strip():
+                st.warning(
+                    "Please enter an answer, or use Ask later."
+                )
+            else:
+                _submit(answer)
+        elif ask_later:
+            _submit("unknown - needs follow-up")
 
 
 # --- Stage: synthesis_ready ---
 
 elif stage == "synthesis_ready":
-    st.header("3. Generate artifacts")
-    st.write(
-        "Interview complete. Generate the three decision-support artifacts."
+    st.markdown(
+        "<div class='t-headline'>Ready to generate</div>"
+        "<div class='t-body' style='margin: 8px 0 24px 0; "
+        "max-width: 620px;'>"
+        "All interview answers are captured. Generate the care plan, "
+        "acuity factors, risk register, and intake decision in one "
+        "batch."
+        "</div>",
+        unsafe_allow_html=True,
     )
+    _profile = st.session_state.profile
+    _op_snips = [
+        s for s in _profile.evidence_snippets if s.source == "operator"
+    ]
+    _open_unknowns = [
+        s
+        for s in _op_snips
+        if any(
+            tok in (s.verbatim_text or "").lower()
+            for tok in ("unknown", "not sure", "needs follow-up")
+        )
+    ]
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Operator answers", len(_op_snips))
+    c2.metric(
+        "Triggered conditions",
+        len(st.session_state.triggered_conditions),
+    )
+    c3.metric(
+        "Source disagreements", len(_profile.source_disagreements)
+    )
+    c4.metric("Open unknowns", len(_open_unknowns))
+    if st.session_state.triggered_conditions:
+        st.caption(
+            "Covered: "
+            + ", ".join(
+                _TREE_PRETTY.get(c, c)
+                for c in st.session_state.triggered_conditions
+            )
+        )
+    if _open_unknowns:
+        with st.expander(
+            f"Open unknowns ({len(_open_unknowns)})", expanded=False
+        ):
+            for _s in _open_unknowns:
+                _human = _humanize_operator_claim(_s.claim)
+                st.markdown(f"- {_human}")
+    st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
     if st.button("Generate Artifacts", type="primary"):
-        dshs_rules = _load_dshs_rules()
-        with st.spinner("Generating care plan..."):
-            care = generate_care_plan(
-                st.session_state.profile, st.session_state.source_docs
+        try:
+            dshs_rules = _load_dshs_rules()
+            with st.spinner(
+                "Drafting the care plan from interview answers…"
+            ):
+                care = generate_care_plan(
+                    st.session_state.profile,
+                    st.session_state.source_docs,
+                )
+            with st.spinner(
+                "Mapping CARE acuity factors to WAC 388-106…"
+            ):
+                recs = generate_acuity_factor_recommendation(
+                    st.session_state.profile,
+                    st.session_state.source_docs,
+                    st.session_state.disclosure_text,
+                    dshs_rules,
+                )
+            with st.spinner(
+                "Cross-checking capability gaps against the disclosure…"
+            ):
+                reg = generate_risk_register(
+                    st.session_state.profile,
+                    st.session_state.disclosure_text,
+                )
+            with st.spinner(
+                "Reaching an intake recommendation…"
+            ):
+                decision = generate_intake_decision(
+                    care_plan=care,
+                    acuity_factor_recommendations=recs,
+                    risk_register=reg,
+                    profile=st.session_state.profile,
+                )
+        except Exception as exc:
+            st.error(
+                "Synthesis failed. One of the model calls returned an "
+                "error. Click Generate Artifacts again to retry."
             )
-        with st.spinner("Generating acuity factor recommendations..."):
-            recs = generate_acuity_factor_recommendation(
-                st.session_state.profile,
-                st.session_state.source_docs,
-                st.session_state.disclosure_text,
-                dshs_rules,
-            )
-        with st.spinner("Generating risk register..."):
-            reg = generate_risk_register(
-                st.session_state.profile, st.session_state.disclosure_text
-            )
-        with st.spinner("Generating intake decision..."):
-            decision = generate_intake_decision(
-                care_plan=care,
-                acuity_factor_recommendations=recs,
-                risk_register=reg,
-                profile=st.session_state.profile,
-            )
+            st.caption(f"Details: {exc}")
+            st.stop()
         st.session_state.artifacts = {
             "care_plan": care,
             "acuity_factor_recommendations": recs,
@@ -2049,46 +4040,70 @@ elif stage == "synthesis_ready":
 # --- Stage: synthesis_done ---
 
 elif stage == "synthesis_done":
-    st.header("4. Artifacts")
+    # Reset the per-render evidence-context counter so every snippet
+    # chip button gets a stable, collision-free key for this rerun.
+    st.session_state["_ev_ctx_seq"] = 0
 
-    if compare_baseline and st.session_state.baseline_output is None:
-        if st.button("Run baseline single-call for comparison"):
-            with st.spinner("Running baseline single-call..."):
-                dshs_rules = _load_dshs_rules()
-                st.session_state.baseline_output = run_baseline(
-                    discharge_summary=st.session_state.source_docs[
-                        "discharge_summary"
-                    ],
-                    family_notes=st.session_state.source_docs["family_notes"],
-                    disclosure_text=st.session_state.disclosure_text,
-                    dshs_rules=dshs_rules,
-                )
+    # The workflow stepper above already conveys "Results" position;
+    # this row keeps the title + the New intake escape hatch.
+    title_col, btn_col = st.columns([5, 1])
+    with title_col:
+        st.markdown(
+            "<div class='t-headline' style='margin:0 0 12px 0;'>"
+            "Results</div>",
+            unsafe_allow_html=True,
+        )
+    with btn_col:
+        if st.button(
+            "New intake",
+            key="new_intake_button",
+            use_container_width=True,
+        ):
+            for _k in list(st.session_state.keys()):
+                del st.session_state[_k]
             st.rerun()
+    # Focus hints proved confusing because Streamlit cannot switch
+    # tabs programmatically — drop the stale signal.
+    st.session_state.pop("focus_action_plan", None)
+    st.session_state.pop("focus_sources_tab", None)
 
     artifacts = st.session_state.artifacts
     profile = st.session_state.profile
     baseline = st.session_state.baseline_output
     decision = st.session_state.intake_decision
 
-    # Global header (above tabs): decision card + readiness dashboard +
-    # blocker banner + evidence provenance map. These are global
-    # admission-state elements — they belong to the whole Stage 4
-    # surface, not to any single artifact tab. The conditions checklist
-    # is intentionally dropped here: the Action Plan workstream
-    # supersedes it via condition-type tasks (status / confirmed-by /
-    # confirmed-date), which carry richer state than a flat checkbox.
-    if decision is not None:
-        rationale_short = _first_two_sentences(
-            decision.get("rationale", "")
-        )
-        render_decision_card(
-            decision.get("recommendation", ""),
-            rationale_short,
-        )
+    # Auto-generate the Action Plan markdown so the worklist + PDF are
+    # ready the moment the operator opens the tab. Pure template work
+    # (no LLM call) — safe to run synchronously each time it's missing.
+    if (
+        st.session_state.get("draft_action_plan") is None
+        and decision is not None
+        and artifacts is not None
+        and profile is not None
+    ):
+        try:
+            _resident_name = (
+                profile.demographics.resident_name_placeholder
+                or "Resident (name not documented)"
+            )
+            st.session_state.draft_action_plan = (
+                generate_admission_action_plan(
+                    resident_name=_resident_name,
+                    afh_name="AFH Operator",
+                    artifacts={
+                        **artifacts,
+                        "intake_decision": decision,
+                    },
+                    profile=profile,
+                )
+            )
+        except Exception:
+            st.session_state.draft_action_plan = ""
 
-        # Workstreams + KPIs are computed once at global scope so the
-        # readiness dashboard above the tabs and the per-owner
-        # subgroups inside Action Plan both read the same numbers.
+    if decision is not None:
+        # Workstreams + KPIs computed once at global scope so verdict
+        # subtitle, progress denominator, next-steps, and Action Plan
+        # tab all read the same numbers.
         global_open_qs, global_action_tasks = _build_workstreams(
             decision,
             artifacts["care_plan"],
@@ -2105,116 +4120,277 @@ elif stage == "synthesis_done":
             global_open_qs, global_action_tasks
         )
 
-        st.subheader("Admission Readiness")
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("High blockers", global_high_rem)
-        col2.metric("Medium", global_med_rem)
-        col3.metric("Follow-up", global_fu_rem)
-        col4.metric("Completed", global_completed)
-        if global_total_tasks > 0:
-            st.progress(global_completed / global_total_tasks)
+        rec = decision.get("recommendation", "")
+        rationale_full = (decision.get("rationale") or "").strip()
+        if rec == "accept":
+            v_label = "ACCEPT"
+        elif rec == "accept_with_conditions":
+            v_label = "ACCEPT WITH CONDITIONS"
+        else:
+            v_label = "HOLD FOR REVIEW"
+        # Tasteful celebratory moment: confetti the first time the
+        # operator lands on an unconditional ACCEPT verdict for this
+        # session — never on subsequent reruns.
+        if (
+            rec == "accept"
+            and not st.session_state.get("_celebrated_accept")
+        ):
+            st.balloons()
+            st.session_state["_celebrated_accept"] = True
+        # Banner state is dynamic: color reflects current blocker count
+        # so the operator sees the verdict get greener as work clears.
+        if global_high_rem >= 8:
+            accent_color, accent_icon = "#991b1b", "⚠"
+        elif global_high_rem >= 1:
+            accent_color, accent_icon = "#b45309", "⚠"
+        else:
+            accent_color, accent_icon = "#15803d", "✓"
 
-        # Single global blocker banner — only fires for unresolved
-        # High-priority tasks. Red is reserved for this state.
-        _render_blocker_banner(global_high_rem)
+        # Owner pending list — used by the hero blocking-owners block.
+        owner_pending: list[tuple[str, int]] = []
+        for owner, tasks in global_action_tasks.items():
+            pending = sum(1 for t in tasks if not _is_task_done(t))
+            if pending > 0:
+                owner_pending.append((owner, pending))
+        owner_pending.sort(key=lambda x: -x[1])
 
-        # Evidence provenance map — global, since it spans every
-        # artifact and every claim cited within them.
+        acked = st.session_state.get("verdict_acknowledged_at")
+
+        # ----- Hero Status Block -----
+        with st.container(border=True):
+            # Verdict label — color reflects severity.
+            st.markdown(
+                f"<div class='hero-verdict' "
+                f"style='color:{accent_color};'>"
+                f"{accent_icon} {v_label}</div>",
+                unsafe_allow_html=True,
+            )
+
+            # Big count — switches to "All clear" when none.
+            if global_high_rem > 0:
+                st.markdown(
+                    f"<div class='hero-blocker-num'>{global_high_rem}"
+                    f"</div>"
+                    f"<div class='hero-blocker-label'>"
+                    f"concern{'' if global_high_rem == 1 else 's'} "
+                    f"to address"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.markdown(
+                    "<div class='hero-blocker-num' "
+                    "style='font-size:36px; color:#15803d;'>"
+                    "All clear</div>"
+                    "<div class='hero-blocker-label'>"
+                    "No concerns to address.</div>",
+                    unsafe_allow_html=True,
+                )
+
+            # Admission readiness section.
+            if global_total_tasks > 0:
+                st.markdown(
+                    "<div class='hero-section-label'>"
+                    "Admission readiness</div>",
+                    unsafe_allow_html=True,
+                )
+                st.progress(global_completed / global_total_tasks)
+                st.markdown(
+                    f"<div class='hero-progress-text'>"
+                    f"{global_completed} of {global_total_tasks} "
+                    f"tasks complete</div>",
+                    unsafe_allow_html=True,
+                )
+            else:
+                cond_total = len(
+                    decision.get("conditions_before_admission") or []
+                )
+                if cond_total > 0:
+                    st.markdown(
+                        "<div class='hero-section-label'>"
+                        "Admission readiness</div>",
+                        unsafe_allow_html=True,
+                    )
+                    st.progress(0.0)
+                    st.markdown(
+                        f"<div class='hero-progress-text'>0 of "
+                        f"{cond_total} conditions complete</div>",
+                        unsafe_allow_html=True,
+                    )
+
+            # Owners to contact — clickable cards filter Action Plan.
+            if owner_pending:
+                st.markdown(
+                    "<div class='hero-section-label'>"
+                    "Who to contact first</div>",
+                    unsafe_allow_html=True,
+                )
+                owner_cols = st.columns(min(len(owner_pending), 4))
+                for i, (owner, n) in enumerate(owner_pending[:4]):
+                    col = owner_cols[i % len(owner_cols)]
+                    display_owner = (
+                        "Needs assignment"
+                        if owner == "Needs Assignment"
+                        else owner
+                    )
+                    btn_label = f"{display_owner}  ·  {n}"
+                    if col.button(
+                        btn_label,
+                        key=f"hero_owner_{owner}",
+                        use_container_width=True,
+                    ):
+                        st.session_state[
+                            "action_plan_owner_filter"
+                        ] = owner
+                        if not acked:
+                            st.session_state[
+                                "verdict_acknowledged_at"
+                            ] = datetime.now().strftime("%H:%M")
+                        st.rerun()
+
+            # Acknowledge / acknowledged ribbon.
+            if not acked:
+                ack_l, _ = st.columns([2, 3])
+                with ack_l:
+                    if st.button(
+                        "Acknowledge & start resolving",
+                        type="primary",
+                        key="verdict_ack_button",
+                        use_container_width=True,
+                    ):
+                        st.session_state["verdict_acknowledged_at"] = (
+                            datetime.now().strftime("%H:%M")
+                        )
+                        st.rerun()
+            else:
+                st.markdown(
+                    f"<div style='font-size:12px; color:#15803d; "
+                    f"font-weight:600; margin-top:8px;'>"
+                    f"✓ Acknowledged at {acked}</div>",
+                    unsafe_allow_html=True,
+                )
+
+            # Why this verdict — collapsed by default.
+            if rationale_full:
+                with st.expander("Why this verdict?", expanded=False):
+                    _render_prose(rationale_full)
+
+
+        # Audit metadata moved out of the primary workflow zone.
         combined_for_map = {
             **artifacts,
             "intake_decision": decision,
         }
-        _render_evidence_provenance_map(combined_for_map, profile)
+        all_snips = profile.evidence_snippets
+        unref_count = sum(
+            1
+            for s in all_snips
+            if not find_snippet_references(
+                s.snippet_id, combined_for_map
+            )
+        )
+        with st.expander("Audit & Methodology", expanded=False):
+            st.markdown(
+                f"<div style='font-size:14px; font-weight:600; "
+                f"color:var(--text-primary);'>Evidence base: "
+                f"{len(all_snips)} snippets · {unref_count} "
+                f"unreferenced</div>"
+                "<div style='font-size:12px; color:var(--text-muted); "
+                "margin-top:2px;'>Full provenance map and per-snippet "
+                "audit trail live in the Sources &amp; Debug tab.</div>"
+                "<div style='border-top:1px solid var(--border-default); "
+                "margin:12px 0;'></div>"
+                "<div style='font-size:14px; font-weight:600; "
+                "color:var(--text-primary);'>Methodology comparison</div>"
+                "<div style='font-size:12px; color:var(--text-muted); "
+                "margin-top:2px;'>For evaluation only: compares the "
+                "staged pipeline against a one-shot baseline.</div>",
+                unsafe_allow_html=True,
+            )
+            if not compare_baseline:
+                st.caption(
+                    "Enable 'Compare against baseline' in the sidebar "
+                    "to activate side-by-side rendering."
+                )
+            if (
+                compare_baseline
+                and st.session_state.baseline_output is None
+            ):
+                if st.button(
+                    "Run baseline single-call for comparison",
+                    key="run_baseline_button",
+                ):
+                    try:
+                        with st.spinner("Running baseline single-call..."):
+                            dshs_rules = _load_dshs_rules()
+                            st.session_state.baseline_output = run_baseline(
+                                discharge_summary=st.session_state.source_docs[
+                                    "discharge_summary"
+                                ],
+                                family_notes=st.session_state.source_docs[
+                                    "family_notes"
+                                ],
+                                disclosure_text=st.session_state.disclosure_text,
+                                dshs_rules=dshs_rules,
+                            )
+                    except Exception as exc:
+                        st.error(
+                            "Baseline run failed. Try again or proceed "
+                            "without comparison."
+                        )
+                        st.caption(f"Details: {exc}")
+                    else:
+                        st.rerun()
+            elif compare_baseline and st.session_state.baseline_output is not None:
+                st.caption(
+                    "Baseline already loaded. See per-tab comparisons."
+                )
     else:
         global_open_qs, global_action_tasks = ({}, {})
         global_high_rem = 0
-
-    st.divider()
+        combined_for_map = {**(artifacts or {})}
 
     (
-        tab_summary,
         tab_action,
+        tab_summary,
         tab_care,
-        tab_acuity,
         tab_risk,
+        tab_acuity,
+        tab_evidence,
         tab_profile,
     ) = st.tabs(
         [
-            "Summary",
             "Action Plan",
+            "Family Communication",
             "Care Plan",
-            "Acuity Factors",
-            "Risk Register",
-            "Profile",
+            "Capability Gaps",
+            "CARE Factors",
+            "Evidence Map",
+            "Sources & Debug",
         ]
     )
 
-    # Summary — operator-first order: the actual answer (talking points)
-    # first, process transparency (provenance) second, edge cases
-    # (disagreements / open questions) last, and only when non-empty.
+    # Family Communication — operator-first order: the call script
+    # (talking points) first, provenance second, edge cases last.
     with tab_summary:
-        render_info_card(
-            "Summary",
-            "Operator script and decision context.",
-            accent="#374151",
-        )
         plan = artifacts["care_plan"]
-        acuity_recs = artifacts["acuity_factor_recommendations"]
-        risk_register = artifacts["risk_register"]
-        # Single source of truth for the unresolved-disagreements list:
-        # whatever the Unresolved Disagreements section renders is also
-        # what the provenance box counts, so the two cannot diverge.
         unresolved_disagreements = plan["unresolved_disagreements"]
         open_questions = plan.get("open_questions_for_followup", [])
 
-        # 1. Talking points — render every item as a TALKING POINT N
-        # card with the operator-facing "What to say" line. No overflow
-        # collapsers (3-7 items is short enough to scan).
+        # Talking points — clean numbered list, no "What to say" prefix
+        # or boxed cards. Reads as a phone-call script.
         if decision is not None:
             tps = decision.get("family_call_talking_points", [])
             if tps:
                 st.subheader("Talking points for the family call")
                 for i, tp in enumerate(tps, 1):
-                    _render_talking_point_card(i, tp)
+                    st.markdown(f"**{i}.** {tp}")
 
-        # 2. Divider.
-        st.divider()
+        # Provenance is already represented in the Hero (totals) and the
+        # Sources & Debug tab (full audit). Skip the bullet-list card
+        # here so Family Communication stays a clean call script.
 
-        # 3. Provenance box — all counts computed live from existing
-        # objects.
-        operator_answer_count = sum(
-            1 for s in profile.evidence_snippets if s.source == "operator"
-        )
-        triggered_condition_count = len(
-            st.session_state.triggered_conditions
-        )
-        evidence_snippet_count = len(profile.evidence_snippets)
-        acuity_factor_count = len(acuity_recs["recommendations"])
-        risk_gap_count = len(risk_register["gaps"])
-        disagreement_count = len(unresolved_disagreements)
-
-        with st.container(border=True):
-            st.subheader("How this recommendation was generated")
-            st.caption(
-                "Every claim below traces to a verifiable evidence ID."
-            )
-            st.markdown(
-                f"- ✓ {operator_answer_count} structured operator interview "
-                f"responses captured across {triggered_condition_count} "
-                "clinical conditions\n"
-                f"- ✓ {evidence_snippet_count} evidence snippets extracted "
-                "from discharge summary and family notes\n"
-                "- ✓ 1 AFH Disclosure of Services document cross-checked "
-                "against resident needs\n"
-                f"- ✓ {acuity_factor_count} acuity factors evaluated against "
-                "Washington CARE criteria (WAC 388-106)\n"
-                f"- ✓ {risk_gap_count} disclosure gaps identified and "
-                "severity-ranked\n"
-                f"- ✓ {disagreement_count} unresolved source disagreements "
-                "surfaced for clinical review"
-            )
-
-        # 4. Unresolved disagreements — prefer the structured
+        # Unresolved disagreements — prefer the structured
         # profile.source_disagreements (carries discharge_claim /
         # family_claim / evidence_snippet_ids); fall back to
         # care_plan.unresolved_disagreements as narrative cards when
@@ -2244,13 +4420,6 @@ elif stage == "synthesis_done":
     # st.rerun() after state transitions so the rendered surface
     # matches the new state immediately.
     with tab_action:
-        render_info_card(
-            "Action Plan",
-            "Downloadable worksheet for move-in preparation. Not a "
-            "legal agreement — requires operator review.",
-            accent="#1e3a5f",
-        )
-
         def _generate_action_plan() -> str:
             resident_name = (
                 profile.demographics.resident_name_placeholder
@@ -2266,14 +4435,25 @@ elif stage == "synthesis_done":
                 profile=profile,
             )
 
-        if st.session_state.draft_action_plan is None:
+        # The draft markdown is auto-generated at synthesis_done; the
+        # else-branch below is the only state. Keep an explicit guard
+        # to fall back to a regenerate-only view if generation failed.
+        if not st.session_state.draft_action_plan:
+            st.warning(
+                "Action Plan markdown could not be generated. "
+                "Click Regenerate below to retry."
+            )
             if st.button(
-                "Generate Draft Admission Action Plan",
+                "Regenerate Action Plan",
                 type="primary",
+                key="regen_action_plan_fallback",
             ):
-                st.session_state.draft_action_plan = (
-                    _generate_action_plan()
-                )
+                try:
+                    st.session_state.draft_action_plan = (
+                        _generate_action_plan()
+                    )
+                except Exception as exc:
+                    st.error(f"Generation failed: {exc}")
                 st.rerun()
         else:
             # Decision card, readiness dashboard, blocker banner and
@@ -2285,83 +4465,143 @@ elif stage == "synthesis_done":
             open_qs = global_open_qs
             action_tasks = global_action_tasks
 
-            st.date_input(
-                "Target move-in date",
-                value=st.session_state.get("target_move_in_date"),
-                key="target_move_in_date",
-                help=(
-                    "Used to suggest default due dates for action tasks. "
-                    "Operator can override the due date on any task."
-                ),
-            )
+            # Compact top strip: title + move-in date.
+            strip_l, strip_m = st.columns([3, 2])
+            with strip_l:
+                st.markdown(
+                    "<div style='font-size:22px; font-weight:700; "
+                    "color:#111827; margin-bottom:2px;'>Action Plan"
+                    "</div><div style='font-size:12px; color:#6b7280;'>"
+                    "Interactive move-in worklist.</div>",
+                    unsafe_allow_html=True,
+                )
+            with strip_m:
+                st.date_input(
+                    "Target move-in",
+                    value=st.session_state.get("target_move_in_date"),
+                    key="target_move_in_date",
+                )
 
-            st.divider()
-            st.subheader("Open Questions to Resolve")
-            st.caption(
-                "Information still needed before admission can be "
-                "finalized. Resolve by capturing the answer in each "
-                "task."
+            # Owner filter is integrated into the Action Tasks heading
+            # below; no separate filter banner row.
+            owner_filter = st.session_state.get(
+                "action_plan_owner_filter"
             )
-            _render_open_questions_workstream(open_qs)
+            if owner_filter:
+                open_qs = {
+                    k: v
+                    for k, v in open_qs.items()
+                    if k == owner_filter
+                }
+                action_tasks = {
+                    k: v
+                    for k, v in action_tasks.items()
+                    if k == owner_filter
+                }
 
-            st.divider()
-            st.subheader("Action Tasks")
-            st.caption(
-                "Concrete admission tasks grouped by owner. Blocking "
-                "items must clear before move-in; pre-admission items "
-                "should clear by the target date."
-            )
+            # Open Questions — compact empty state when none.
+            has_open_qs = any(open_qs.values())
+            if has_open_qs:
+                st.markdown(
+                    "<div style='font-size:18px; font-weight:700; "
+                    "color:#111827; margin:22px 0 10px 0;'>"
+                    "Open Questions to Resolve</div>",
+                    unsafe_allow_html=True,
+                )
+                _render_open_questions_workstream(open_qs)
+            else:
+                st.markdown(
+                    "<div class='empty-ok'>Open questions resolved"
+                    "</div>",
+                    unsafe_allow_html=True,
+                )
+
+            # Action Tasks heading — embeds the active filter chip when
+            # set, with an inline ✕ that clears the filter.
+            if owner_filter:
+                hdr_cols = st.columns([5, 1])
+                with hdr_cols[0]:
+                    st.markdown(
+                        "<div style='font-size:18px; font-weight:700; "
+                        "color:#111827; margin:22px 0 10px 0;'>"
+                        "Action Tasks "
+                        "<span style='font-size:12px; color:#6b7280; "
+                        "font-weight:500;'>· Filtered to</span> "
+                        f"<span class='filter-chip'>"
+                        f"{html_escape(owner_filter)}</span></div>",
+                        unsafe_allow_html=True,
+                    )
+                with hdr_cols[1]:
+                    if st.button(
+                        "✕ Clear",
+                        key="clear_action_owner_filter",
+                        use_container_width=True,
+                    ):
+                        del st.session_state[
+                            "action_plan_owner_filter"
+                        ]
+                        st.rerun()
+            else:
+                st.markdown(
+                    "<div style='font-size:18px; font-weight:700; "
+                    "color:#111827; margin:22px 0 10px 0;'>"
+                    "Action Tasks</div>",
+                    unsafe_allow_html=True,
+                )
             _render_action_tasks_workstream(action_tasks)
             _render_add_custom_task()
 
-            with st.expander(
-                "Generated document for offline review",
-                expanded=False,
-            ):
-                st.caption(
-                    "Markdown is provided for easy copy/paste into "
-                    "official AFH templates. Final admission documents "
-                    "must be completed by the operator."
+            try:
+                pdf_bytes = generate_admission_action_plan_pdf(
+                    st.session_state.draft_action_plan
                 )
-                try:
-                    pdf_bytes = generate_admission_action_plan_pdf(
-                        st.session_state.draft_action_plan
-                    )
-                    st.download_button(
-                        label="Download PDF Worksheet",
-                        data=pdf_bytes,
-                        file_name=(
-                            "admission_action_plan_"
-                            f"{datetime.now().strftime('%Y%m%d')}.pdf"
-                        ),
-                        mime="application/pdf",
-                        type="primary",
-                    )
-                except Exception as exc:
-                    st.error(f"Could not generate PDF: {exc}")
-                with st.expander(
-                    "Advanced / Markdown export", expanded=False
+                st.download_button(
+                    label="Download PDF",
+                    data=pdf_bytes,
+                    file_name=(
+                        "admission_action_plan_"
+                        f"{datetime.now().strftime('%Y%m%d')}.pdf"
+                    ),
+                    mime="application/pdf",
+                    type="primary",
+                    key="ap_pdf_dl",
+                )
+            except Exception:
+                st.error("PDF unavailable.")
+
+            with st.expander(
+                "Preview generated document", expanded=False
+            ):
+                intro_md, sections = _parse_action_plan_sections(
+                    st.session_state.draft_action_plan
+                )
+                # Expand all / Collapse all toggle for the section
+                # sub-expanders below.
+                _expand_doc = bool(
+                    st.session_state.get("expand_all_doc_sections", False)
+                )
+                if st.button(
+                    "Collapse all" if _expand_doc else "Expand all",
+                    key="expand_all_doc_toggle",
                 ):
-                    st.download_button(
-                        label="Download Markdown Worksheet (.md)",
-                        data=st.session_state.draft_action_plan,
-                        file_name=(
-                            "admission_action_plan_"
-                            f"{datetime.now().strftime('%Y%m%d')}.md"
-                        ),
-                        mime="text/markdown",
+                    st.session_state["expand_all_doc_sections"] = (
+                        not _expand_doc
                     )
-                    intro_md, sections = _parse_action_plan_sections(
-                        st.session_state.draft_action_plan
+                    st.rerun()
+                if intro_md:
+                    st.markdown(
+                        _decorate_severity_tokens(intro_md),
+                        unsafe_allow_html=True,
                     )
-                    if intro_md:
-                        st.markdown(intro_md)
-                    for section_title, section_body in sections:
-                        with st.expander(
-                            section_title, expanded=False
-                        ):
-                            if section_body:
-                                st.markdown(section_body)
+                for section_title, section_body in sections:
+                    with st.expander(
+                        section_title, expanded=_expand_doc
+                    ):
+                        if section_body:
+                            st.markdown(
+                                _decorate_severity_tokens(section_body),
+                                unsafe_allow_html=True,
+                            )
 
             st.divider()
             st.caption(
@@ -2379,10 +4619,17 @@ elif stage == "synthesis_done":
                 key="regenerate_action_plan_button",
             ):
                 _wipe_workspace_state()
-                st.session_state.draft_action_plan = (
-                    _generate_action_plan()
-                )
-                st.session_state.confirm_regen_checkbox = False
+                try:
+                    st.session_state.draft_action_plan = (
+                        _generate_action_plan()
+                    )
+                except Exception as exc:
+                    st.error(f"Generation failed: {exc}")
+                # Clear the confirm checkbox by removing its key;
+                # direct assignment to a widget-bound key after render
+                # raises in Streamlit.
+                if "confirm_regen_checkbox" in st.session_state:
+                    del st.session_state["confirm_regen_checkbox"]
                 st.rerun()
 
     # Care Plan / Acuity Factors / Risk Register tabs — each tab shows
@@ -2396,11 +4643,6 @@ elif stage == "synthesis_done":
     # individual item. Compare-baseline mode keeps the original full
     # renderer for the side-by-side view.
     with tab_care:
-        render_info_card(
-            "Care Plan",
-            _care_plan_summary(artifacts["care_plan"]),
-            accent="#2563eb",
-        )
         care_plan_view = artifacts["care_plan"]
         risk_register_view = artifacts["risk_register"]
 
@@ -2413,12 +4655,11 @@ elif stage == "synthesis_done":
             profile, care_plan_view, risk_register_view
         )
 
-        # Model-generated paragraph summary kept as a quiet caption so
-        # the snapshot is the primary frame at top.
+        # Executive summary — surfaced as a readable block (not buried
+        # in a collapsed expander) so it frames the care plan.
         plan_summary = care_plan_view.get("summary")
         if plan_summary:
-            with st.expander("Synthesis-generated summary", expanded=False):
-                st.markdown(plan_summary)
+            _render_prose(plan_summary, label="Clinical summary")
 
         st.divider()
 
@@ -2458,19 +4699,57 @@ elif stage == "synthesis_done":
                 _render_care_plan(baseline["care_plan"], profile)
 
     with tab_acuity:
-        render_info_card(
-            "Acuity Factors",
-            _acuity_summary(artifacts["acuity_factor_recommendations"]),
-            accent="#7c3aed",
-        )
-        with st.expander(
-            "View acuity factor details", expanded=False
-        ):
-            acuity = artifacts["acuity_factor_recommendations"]
+        acuity = artifacts["acuity_factor_recommendations"]
+        acuity_recs_list = acuity.get("recommendations", []) or []
+
+        if acuity_recs_list:
+            for r in acuity_recs_list:
+                conf = (r.get("confidence") or "low").lower()
+                sev = (
+                    "high"
+                    if conf == "high"
+                    else ("medium" if conf == "medium" else "low")
+                )
+                fac_name = (
+                    r.get("acuity_factor_name")
+                    or r.get("acuity_factor_id")
+                    or "?"
+                )
+                st.markdown(
+                    severity_badge(sev) + f" {html_escape(fac_name)}",
+                    unsafe_allow_html=True,
+                )
+
+        with st.expander("Regulatory context", expanded=False):
+            st.caption(
+                "CARE factors inform Washington CARE assessment and "
+                "rate-setting but do not independently determine "
+                "payment."
+            )
             if acuity.get("method_note"):
-                st.caption(acuity["method_note"])
-            for rec in acuity.get("recommendations", []) or []:
-                _render_acuity_factor_nested(rec, profile)
+                st.markdown(acuity["method_note"])
+
+        all_gap_flagged = False
+        if acuity_recs_list:
+            gap_count = sum(
+                1 for r in acuity_recs_list
+                if r.get("disclosure_gap_flagged")
+            )
+            all_gap_flagged = gap_count == len(acuity_recs_list)
+            if all_gap_flagged:
+                st.warning(
+                    "AFH disclosure-of-services document does not "
+                    "currently support any of the "
+                    f"{len(acuity_recs_list)} recommended CARE factors."
+                )
+
+        for rec in acuity_recs_list:
+            _render_acuity_factor_nested(
+                rec,
+                profile,
+                suppress_disclosure_warning=all_gap_flagged,
+            )
+
         if compare_baseline and baseline is not None:
             with st.expander(
                 "Compare against baseline (single call)", expanded=False
@@ -2480,44 +4759,98 @@ elif stage == "synthesis_done":
                 )
 
     with tab_risk:
-        render_info_card(
-            "Risk Register",
-            _risk_summary(artifacts["risk_register"]),
-            accent="#b45309",
+        risk = artifacts["risk_register"]
+        gaps_all = risk.get("gaps", []) or []
+        sev_count = {"high": 0, "medium": 0, "low": 0}
+        for _g in gaps_all:
+            _s = _g.get("severity")
+            if _s in sev_count:
+                sev_count[_s] += 1
+        total_gaps = len(gaps_all)
+        st.markdown(
+            f"<div class='t-caption'>{total_gaps} gap"
+            f"{'' if total_gaps == 1 else 's'} · "
+            f"{sev_count['high']} high · "
+            f"{sev_count['medium']} medium · "
+            f"{sev_count['low']} low</div>",
+            unsafe_allow_html=True,
         )
-        with st.expander("View risk register", expanded=False):
-            risk = artifacts["risk_register"]
-            if risk.get("method_note"):
-                st.caption(risk["method_note"])
-            gaps_sorted = sorted(
-                risk.get("gaps", []) or [],
-                key=lambda g: _SEVERITY_ORDER.get(g.get("severity"), 99),
+        if risk.get("method_note"):
+            with st.expander("About this analysis", expanded=False):
+                st.markdown(risk["method_note"])
+        if gaps_all:
+            with_quote = sum(
+                1
+                for _g in gaps_all
+                if (_g.get("disclosure_quote") or "").strip()
             )
-            for gap in gaps_sorted:
-                _render_risk_gap_nested(gap, profile)
+            without_quote = total_gaps - with_quote
+            if with_quote == 0:
+                st.info(
+                    "Disclosure document status: The AFH disclosure does "
+                    "not provide supporting language for the gaps below. "
+                    "Treat each gap as requiring operator review before "
+                    "admission."
+                )
+            elif without_quote > 0:
+                st.info(
+                    "Some gaps have supporting disclosure language; gaps "
+                    "without quotes require operator review."
+                )
+        # Preserve original enumeration so gap_NN references match the
+        # synthesis-order convention used by find_snippet_references.
+        indexed_gaps = list(enumerate(gaps_all))
+        sev_labels = (
+            ("high", "High Severity Gaps"),
+            ("medium", "Medium Severity Gaps"),
+            ("low", "Low Severity Gaps"),
+        )
+        for sev_key, sev_title in sev_labels:
+            bucket = [
+                (i, g)
+                for i, g in indexed_gaps
+                if g.get("severity") == sev_key
+            ]
+            if not bucket:
+                continue
+            st.markdown(f"#### {sev_title} ({len(bucket)})")
+            for i, gap in bucket:
+                _render_risk_gap_nested(gap, profile, i)
         if compare_baseline and baseline is not None:
             with st.expander(
                 "Compare against baseline (single call)", expanded=False
             ):
                 _render_risk_register(baseline["risk_register"], profile)
 
-    # Profile — developer telemetry moved here from the sidebar.
+    # Evidence Map — full provenance/audit view, promoted to its own
+    # top-level tab.
+    with tab_evidence:
+        _render_evidence_provenance_map(combined_for_map, profile)
+
+    # Sources & Debug — structured profile + developer telemetry.
     with tab_profile:
-        render_info_card(
-            "Profile",
-            "Structured profile and developer telemetry.",
-            accent="#6b7280",
+        triggered_pretty = (
+            ", ".join(
+                _TREE_PRETTY.get(c, c)
+                for c in st.session_state.triggered_conditions
+            )
+            or "(none)"
         )
-        st.markdown(
-            f"**Triggered conditions:** "
-            f"{', '.join(st.session_state.triggered_conditions) or '(none)'}"
-        )
+        st.markdown(f"**Triggered conditions:** {triggered_pretty}")
         st.markdown(
             f"**Evidence snippets:** {len(profile.evidence_snippets)}"
         )
         with st.expander("Recent snippets"):
             for s in profile.evidence_snippets[-10:]:
-                st.text(f"[{s.source}] {s.snippet_id}: {s.claim[:60]}")
+                if s.source == "operator":
+                    human = _humanize_operator_claim(s.claim)
+                    st.text(f"[OP] {s.snippet_id}: {human}")
+                else:
+                    src_tag = "DC" if s.source == "discharge" else (
+                        "FAM" if s.source == "family" else s.source[:3].upper()
+                    )
+                    preview = (s.verbatim_text or "")[:60]
+                    st.text(f"[{src_tag}] {s.snippet_id}: {preview}")
         st.markdown(
             f"**Source disagreements:** "
             f"{len(profile.source_disagreements)}"
