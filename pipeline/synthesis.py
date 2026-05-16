@@ -207,6 +207,11 @@ CRITICAL RULES:
 6. REVIEW_REQUIRED. Always true. These recommendations are decision support; the AFH operator, family, and (where appropriate) prescriber must review.
 7. WAC_CITATION. Use the wac_citation string from the matching factor in the catalog. Do not invent or modify WAC citations.
 8. METHOD_NOTE. Include a brief method_note clarifying that this output is decision support, that payment depends on DSHS CARE assessment and rate authorization, and that specialty contracts (SBS, RSW, ECS, EARC-SDC) require separate DSHS application — they are not auto-triggered.
+9. CLINICAL THRESHOLD. A diagnosis alone does not satisfy the evidence requirement. Evidence must support that the specific clinical complexity threshold for that factor is met. Examples:
+   - CARE-INSULIN-BGM requires evidence of actual insulin administration or BGM dependency — not merely a diabetes diagnosis.
+   - CARE-MED-ADMIN-MULTI requires evidence of complex multi-drug management, not merely the presence of any medication.
+   - CARE-DEMENTIA-SUPERVISION requires evidence of active behavioral or safety supervision needs, not merely a dementia diagnosis.
+   If evidence shows a condition but not the corresponding complexity, set confidence="low" or suppress the factor entirely.
 
 Then call the record_acuity_recommendations tool."""
 

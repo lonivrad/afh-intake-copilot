@@ -197,62 +197,81 @@ the baseline ran one prompt. Ground truth is encoded per case in
 
 | case | full P | full R | base P | base R | halluc f | halluc b | disagr f | disagr b | gap P f | gap P b | gap R f | gap R b |
 |------|-------:|-------:|-------:|-------:|---------:|---------:|:--------:|:--------:|--------:|--------:|--------:|--------:|
-| case_01 | 0.00 | 1.00 | 0.00 | 1.00 | 0 | n/a | no | yes | 0.00 | 0.00 | 1.00 | 1.00 |
-| case_02 | 0.60 | 1.00 | 0.50 | 1.00 | 0 | n/a | yes | yes | 0.83 | 0.60 | 1.00 | 0.50 |
-| case_03 | 0.25 | 1.00 | 0.20 | 1.00 | 0 | n/a | yes | yes | 0.75 | 0.60 | 1.00 | 1.00 |
-| case_04 | 0.80 | 1.00 | 0.67 | 1.00 | 0 | n/a | yes | yes | 0.86 | 1.00 | 1.00 | 1.00 |
-| case_05 | 0.50 | 1.00 | 0.50 | 1.00 | 0 | n/a | no | yes | 1.00 | 1.00 | 1.00 | 1.00 |
-| case_06 | 0.90 | 1.00 | 0.75 | 1.00 | 0 | n/a | yes | yes | 0.90 | 0.89 | 1.00 | 1.00 |
-| case_07 | 0.25 | 1.00 | 0.20 | 1.00 | 0 | n/a | yes | yes | 0.60 | 0.80 | 0.67 | 0.67 |
-| case_08 | 0.40 | 1.00 | 0.33 | 1.00 | 0 | n/a | yes | yes | 1.00 | 1.00 | 1.00 | 0.67 |
+| case_01 | 0.00 | 1.00 | 0.00 | 1.00 | 0 | n/a | no | no | 0.00 | 0.00 | 1.00 | 1.00 |
+| case_02 | 0.60 | 1.00 | 0.50 | 1.00 | 0 | n/a | yes | yes | 0.71 | 1.00 | 1.00 | 0.50 |
+| case_03 | 0.25 | 1.00 | 0.25 | 1.00 | 0 | n/a | yes | yes | 1.00 | 0.83 | 1.00 | 1.00 |
+| case_04 | 0.80 | 1.00 | 0.67 | 1.00 | 0 | n/a | no | yes | 1.00 | 0.80 | 1.00 | 1.00 |
+| case_05 | 0.50 | 1.00 | 0.50 | 1.00 | 0 | n/a | yes | yes | 1.00 | 1.00 | 1.00 | 1.00 |
+| case_06 | 0.90 | 1.00 | 0.82 | 1.00 | 0 | n/a | yes | yes | 1.00 | 1.00 | 1.00 | 1.00 |
+| case_07 | 0.33 | 1.00 | 0.20 | 1.00 | 0 | n/a | yes | yes | 0.80 | 0.80 | 1.00 | 1.00 |
+| case_08 | 0.50 | 1.00 | 0.33 | 1.00 | 0 | n/a | yes | yes | 1.00 | 0.67 | 1.00 | 1.00 |
 
 ### Macro averages
 
 | Metric | Full pipeline | Baseline |
 |---|---:|---:|
-| Acuity-factor precision | **0.46** | 0.39 |
+| Acuity-factor precision | **0.49** | 0.41 |
 | Acuity-factor recall | 1.00 | 1.00 |
 | Hallucination count | **0.00** | n/a |
-| Capability-gap precision | 0.74 | 0.74 |
-| Capability-gap recall | **0.96** | 0.85 |
-| Source-disagreement detection correct | **4 / 8** | 2 / 8 |
+| Capability-gap precision | **0.81** | 0.76 |
+| Capability-gap recall | **1.00** | 0.94 |
+| Source-disagreement detection correct | **4 / 8** | 3 / 8 |
 
-The staged pipeline improved acuity-factor precision (+0.07),
-capability-gap recall (+0.11), and source-disagreement detection
-(2/8 → 4/8), with **zero hallucinated evidence references**. Recall on
-acuity factors tied — both systems surfaced every required factor, but
-the staged pipeline over-recommended less.
+The staged pipeline beats the single-call baseline on acuity-factor
+precision (+0.08), capability-gap precision (+0.05) and recall (+0.06),
+and source-disagreement detection (4/8 vs 3/8), with **zero hallucinated
+evidence references**. Acuity recall ties at 1.00 — both surface every
+required factor, but the staged pipeline over-recommends less.
+
+These numbers are *after* one targeted prompt iteration (see "Honest
+failure" below): adding a CLINICAL THRESHOLD rule moved acuity precision
+0.46 → 0.49 with recall held at 1.00 (case_07 0.25 → 0.33, case_08
+0.40 → 0.50; no case regressed).
 
 ### Qualitative examples
 
 **Clear win — case_06.** All three modeled conditions, complex
-multi-system acuity. Ground truth: 9 factors. Full pipeline recommended
-10 (all 9 + 1 false positive, precision 0.90); baseline recommended 12
-(all 9 + 3 false positives, precision 0.75). The staged system was more
-disciplined and preserved better evidence linkage.
+multi-system acuity. Full-pipeline acuity precision 0.90 vs baseline
+0.82, with gap precision/recall both 1.00. The staged system stayed
+more disciplined and preserved traceable evidence linkage; the baseline
+over-recommended more factors with no evidence layer.
 
 **Tie — case_05.** Dementia + fall risk with a cognitive-mobility
-mismatch. Both systems recommended the same factors and the same false
-positives (precision 0.50 each). The full pipeline still carried
-traceable evidence IDs; the baseline had no structural evidence layer.
+mismatch. Both systems landed at acuity precision 0.50 with the same
+false positives. The full pipeline still carried traceable evidence
+IDs; the baseline had no structural evidence layer.
 
 **Honest failure — case_01.** Low-acuity diabetes (metformin only, no
 insulin, no hypoglycemic history, full ADL independence). Ground truth:
-zero acuity factors. The full pipeline still recommended
-`CARE-INSULIN-BGM` and `CARE-MED-ADMIN-MULTI`; the baseline also
-over-recommended. Root cause: seeing "diabetes" pulls diabetes-shaped
-acuity factors even when the clinical-complexity threshold is not met.
-This is the dominant failure mode.
+zero acuity factors. The original failure mode: seeing "diabetes" pulled
+diabetes-shaped factors even though no complexity threshold was met. I
+added a **CLINICAL THRESHOLD** rule to the acuity synthesis prompt
+(`pipeline/synthesis.py`) stating that a diagnosis alone does not satisfy
+the evidence requirement — evidence must show the *specific* complexity
+(actual insulin/BGM dependency, complex multi-drug management, active
+supervision need), else set `confidence="low"` or suppress. Measured
+effect: it helped in aggregate (precision 0.46 → 0.49, recall held) and
+*partially* bit on case_01 — `CARE-MED-ADMIN-MULTI` dropped to **low**
+confidence — but the model **still recommends `CARE-INSULIN-BGM` at
+medium** for this metformin-only resident. Mitigated, not eliminated;
+this remains the dominant failure mode.
 
 ### Where it breaks down
 
 - **Over-recommendation** when a diagnosis is present but the clinical
-  threshold is not met (e.g. metformin-only diabetes triggering
-  insulin/BGM complexity). A future fix is to require each recommendation
-  to map more tightly to a specific WAC criterion.
-- **The baseline sometimes matches or beats it** — on case_04 the
-  baseline scored higher capability-gap precision (1.00 vs 0.86) because
-  the full pipeline added a borderline gap outside the expected category.
+  threshold is not met (metformin-only diabetes still pulling
+  `CARE-INSULIN-BGM`). The CLINICAL THRESHOLD prompt rule reduced this
+  in aggregate but did not solve case_01; a stronger fix would hard-gate
+  specific factors on explicit complexity signals rather than relying on
+  the model to self-suppress.
+- **The baseline sometimes matches or beats it** — run-to-run, on
+  individual cases the baseline can edge ahead (e.g. case_02
+  capability-gap precision: baseline 1.00 vs full 0.71, where the staged
+  pipeline flagged an extra borderline gap). The advantage is in the
+  aggregate and in evidence traceability, not every case.
+- **LLM non-determinism** — re-running the eval shifts some per-case
+  numbers (especially disagreement detection and individual gap
+  precision) without any code change; aggregates are the reliable signal.
 - **Input limits** — no OCR for image-only scanned PDFs, Washington-only
   CARE/WAC assumptions, only diabetes/dementia/fall-risk modeled, and no
   PII-handling controls.
@@ -431,4 +450,8 @@ evals/
 
 OCR for scanned PDFs; persistent resident workspaces; more modeled
 conditions; multi-resident intake queue; export to official AFH
-templates; tighter WAC-criterion mapping to reduce over-recommendation.
+templates. The biggest open quality item is the residual
+over-recommendation in case_01: the CLINICAL THRESHOLD prompt rule
+mitigated it but the next step is to **hard-gate** specific acuity
+factors (e.g. `CARE-INSULIN-BGM`) on explicit complexity signals in the
+profile rather than relying on the model to self-suppress.
