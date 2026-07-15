@@ -1,6 +1,6 @@
-streamlit
-anthropic
-pypdf
-python-dotenv
-pydantic
-reportlab
+anthropic==0.102.0
+pypdf==6.11.0
+python-dotenv==1.2.2
+pydantic==2.13.4
+reportlab==4.5.1
+streamlit==1.57.0
