@@ -15,6 +15,7 @@ import re
 from datetime import datetime, timedelta
 from html import escape as html_escape
 from pathlib import Path
+from typing import Any, TypedDict
 
 import streamlit as st
 from pypdf import PdfReader
@@ -114,7 +115,7 @@ _render_workflow_stepper(st.session_state.get("stage", "input"))
 
 # ===== Session-state init =====
 
-DEFAULT_STATE = {
+DEFAULT_STATE: dict[str, Any] = {
     "stage": "input",  # input | profile_review | interview | synthesis_ready | synthesis_done
     "profile": None,
     "triggered_conditions": [],
@@ -365,7 +366,12 @@ _MULTISELECT_ENUM_NODES = {"HOME_ACCOMMODATIONS"}
 # choices not in the tree. Submitted values still flow through the
 # normal parser (and stay verbatim in the evidence snippet); no schema
 # or tree-file change.
-_MULTISELECT_OPTION_OVERRIDES: dict[str, dict[str, object]] = {
+class _OptionOverride(TypedDict, total=False):
+    remove: set[str]
+    add: list[str]
+
+
+_MULTISELECT_OPTION_OVERRIDES: dict[str, _OptionOverride] = {
     "HOME_ACCOMMODATIONS": {
         "remove": {"multiple_modifications"},
         "add": [
@@ -397,7 +403,7 @@ def _has_active_interview_question(session) -> bool:
     Guards every UI read of session.trees[session.current_tree_idx] so a
     completed / reset / advanced-past-end interview cannot crash the
     sidebar or the interview stage."""
-    return (
+    return bool(
         session is not None
         and getattr(session, "trees", None)
         and 0 <= session.current_tree_idx < len(session.trees)
@@ -1433,7 +1439,7 @@ def _wipe_workspace_state() -> None:
     confirmed_by, confirmed_date, show_note) plus custom tasks. The
     target_move_in_date is preserved across regenerate."""
     for k in list(st.session_state.keys()):
-        if k.startswith("task_"):
+        if isinstance(k, str) and k.startswith("task_"):
             del st.session_state[k]
     st.session_state.custom_tasks = []
 
@@ -1674,11 +1680,7 @@ def _render_evidence_unified(
         )
         # De-duplicate while preserving order — a gap/care item can
         # cite the same snippet more than once.
-        seen_ids: set[str] = set()
-        unique_ids = [
-            s for s in snippet_ids
-            if not (s in seen_ids or seen_ids.add(s))
-        ]
+        unique_ids = list(dict.fromkeys(snippet_ids))
         for _i, sid in enumerate(unique_ids):
             snip = by_id.get(sid)
             if snip is None:
@@ -2219,7 +2221,7 @@ with st.sidebar:
         st.caption(f"Operator evidence snippets: {len(_op_snips)}")
         _current_tree_id = _session.trees[_session.current_tree_idx]["tree_id"]
         _section = _NODE_SECTION.get(
-            (_session.get_next_question() or {}).get("node_id"), ""
+            (_session.get_next_question() or {}).get("node_id") or "", ""
         )
         _section_label = (
             f"{_TREE_PRETTY.get(_current_tree_id, _current_tree_id)}"
@@ -2584,8 +2586,8 @@ elif stage == "interview":
             if st.button(
                 "Reset session", key="interview_fallback_reset"
             ):
-                for _k in list(st.session_state.keys()):
-                    del st.session_state[_k]
+                for _sk in list(st.session_state.keys()):
+                    del st.session_state[_sk]
                 st.rerun()
         st.stop()
 
@@ -2717,13 +2719,13 @@ elif stage == "interview":
                     "Remove 'None' or remove the other categories."
                 )
             else:
-                parts = []
+                frid_parts = []
                 for p in selected:
                     if p == "Other" and other_detail.strip():
-                        parts.append(f"Other: {other_detail.strip()}")
+                        frid_parts.append(f"Other: {other_detail.strip()}")
                     else:
-                        parts.append(p)
-                _submit(", ".join(parts))
+                        frid_parts.append(p)
+                _submit(", ".join(frid_parts))
     elif node_id in _MULTISELECT_ENUM_NODES and shape == "enum" and options:
         st.caption("Check all that apply.")
         _ovr = _MULTISELECT_OPTION_OVERRIDES.get(node_id, {})
@@ -2982,8 +2984,8 @@ elif stage == "synthesis_done":
             key="new_intake_button",
             use_container_width=True,
         ):
-            for _k in list(st.session_state.keys()):
-                del st.session_state[_k]
+            for _sk in list(st.session_state.keys()):
+                del st.session_state[_sk]
             st.rerun()
 
     artifacts = st.session_state.artifacts
