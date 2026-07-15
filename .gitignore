@@ -36,6 +36,8 @@ ENV/
 # Testing & coverage
 .pytest_cache/
 .coverage
+.coverage.*
+coverage.xml
 htmlcov/
 .tox/
 
@@ -59,6 +61,9 @@ dmypy.json
 .DS_Store?
 ._*
 Thumbs.db
+
+# Process
+*.pid
 
 # Logs
 *.log
