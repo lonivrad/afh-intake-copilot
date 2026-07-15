@@ -5,10 +5,13 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from pipeline.extraction import run_initial_extraction
+import pytest
+
+from pipeline.extraction import ResidentProfile, run_initial_extraction
 
 
-def main() -> None:
+@pytest.mark.api
+def test_stage1_extraction_case_01() -> None:
     case_path = Path(__file__).parent / "data" / "test_cases" / "case_01.json"
     case = json.loads(case_path.read_text())
 
@@ -28,13 +31,24 @@ def main() -> None:
     print(f"\nEvidence snippets recorded: {len(profile.evidence_snippets)}")
     print(f"Source disagreements recorded: {len(profile.source_disagreements)}")
 
-    # Ground-truth sanity check
+    # ===== Assertions =====
+
+    # Structural: extraction returns a typed profile and a list of triggers.
+    assert isinstance(profile, ResidentProfile)
+    assert isinstance(triggered, list)
+
+    # Every recorded snippet carries a non-empty id and source.
+    for snip in profile.evidence_snippets:
+        assert snip.snippet_id, "evidence snippet missing id"
+        assert snip.source, "evidence snippet missing source"
+
+    # Ground-truth sanity check. Extraction is a live, non-deterministic LLM
+    # call, so this stays a diagnostic (not a hard assert) to avoid a flaky
+    # gate — matching the original smoke-test intent.
     gt = case["ground_truth"]
     expected_disagreement = gt["known_source_disagreement"]
-    if expected_disagreement is None and not profile.source_disagreements:
-        print("\nMatches ground truth: no source disagreement expected, none recorded.")
-    elif expected_disagreement is not None and profile.source_disagreements:
-        print("\nMatches ground truth: disagreement expected and recorded.")
+    if bool(expected_disagreement) == bool(profile.source_disagreements):
+        print("\nMatches ground truth on source-disagreement presence.")
     else:
         print(
             "\nWARNING: disagreement state diverges from ground truth — "
@@ -42,6 +56,8 @@ def main() -> None:
             f"recorded={len(profile.source_disagreements)}"
         )
 
+    print("\nAll structural assertions passed.")
+
 
 if __name__ == "__main__":
-    main()
+    test_stage1_extraction_case_01()

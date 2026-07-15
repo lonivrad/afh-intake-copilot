@@ -9,11 +9,14 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from pipeline.baseline import run_baseline
 from test_synthesis import MOCK_DISCLOSURE
 
 
-def main() -> None:
+@pytest.mark.api
+def test_baseline_single_call_case_04() -> None:
     case = json.loads(Path("data/test_cases/case_04.json").read_text())
     dshs_rules = json.loads(Path("data/dshs_rules.json").read_text())
     valid_factor_ids = {f["acuity_factor_id"] for f in dshs_rules["factors"]}
@@ -124,4 +127,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    test_baseline_single_call_case_04()

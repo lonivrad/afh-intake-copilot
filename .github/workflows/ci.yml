@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  # Manual + nightly triggers for the live-API job below.
+  workflow_dispatch:
+  schedule:
+    # 07:00 UTC daily — exercises the behavioral (live API) tests on a cadence.
+    - cron: "0 7 * * *"
+
+jobs:
+  # Free, keyless job that runs on every push and PR. Never calls the API.
+  test:
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+      - name: Lint (ruff)
+        run: ruff check
+      - name: Type check (mypy, advisory)
+        continue-on-error: true
+        run: mypy pipeline ui app.py
+      - name: Tests (offline subset)
+        run: pytest -m "not api" -v
+
+  # Opt-in job for the live-API behavioral tests. Runs only on manual dispatch
+  # or the nightly schedule, only on the canonical repo, and only if the secret
+  # is actually present — so it no-ops on forks and never leaks spend.
+  api-tests:
+    if: >-
+      (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule')
+      && github.repository == 'lonivrad/afh-intake-copilot'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+      - name: Tests (live API subset)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          AFH_RUN_API_TESTS: "1"
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "ANTHROPIC_API_KEY secret not set; skipping live API tests."
+            exit 0
+          fi
+          pytest -m api -v

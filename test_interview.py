@@ -1,12 +1,28 @@
-"""Smoke test for InterviewSession.
+"""Tests for InterviewSession.
 
-Walks case_04 (diabetes + dementia) using a mocked Stage 1 starting profile
-and a fixed script of operator answers. Verifies tree-load order, branching,
-nested-path state updates, numeric_or_null handling, operator evidence
-recording, and preservation of Stage 1 evidence + source disagreement.
+Two tests:
+
+- test_interview_state_machine_offline runs FULLY OFFLINE. It walks the
+  fall_risk tree with answers crafted to be handled entirely by the local
+  parser (exact enum tokens, digit numerics, plain yes/no), so it exercises the
+  deterministic state machine — a branch taken, a branch skipped, nested-path
+  updates, and the numeric_or_null null case — without any API call. The client
+  is swapped for a stand-in that raises on any fallback, and the test asserts
+  _fallback_parse_count == 0 as proof it never went live.
+
+- test_interview_full_walk_case_04 is the richer case_04 (diabetes + dementia)
+  walk with deliberately conversational answers. 10 of its 22 answers require
+  the LLM to map natural language to canonical enums (e.g. "...basal-bolus
+  regimen." -> basal_bolus), so it is a behavioral test marked `api` and only
+  runs with ANTHROPIC_API_KEY set.
 """
 
 from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
 
 from pipeline.extraction import (
     ConditionsPresent,
@@ -18,6 +34,88 @@ from pipeline.extraction import (
     SourceDisagreement,
 )
 from pipeline.interview import InterviewSession
+
+
+class _NoApiClient:
+    """Stand-in for the Anthropic client that makes any fallback parse fail
+    loudly instead of silently issuing a live (billable) API call. Used by the
+    offline test: if a crafted answer ever trips the LLM fallback, this turns
+    that drift into an immediate test failure rather than a surprise charge."""
+
+    def __getattr__(self, _name: str):
+        raise AssertionError(
+            "InterviewSession attempted a live API fallback parse; the offline "
+            "test's answers must all be handled by the local parser."
+        )
+
+
+def _diabetes_node(node_id: str) -> dict:
+    tree = json.loads(Path("data/trees/diabetes.json").read_text())
+    return next(n for n in tree["nodes"] if n["node_id"] == node_id)
+
+
+def test_interview_state_machine_offline() -> None:
+    """Deterministic state-machine coverage with zero API calls.
+
+    Walks the fall_risk tree. FALL_HISTORY_6MO=yes TAKES the fork into
+    FALL_COUNT; MEDS_FALL_RISK=no SKIPS the (freetext) MEDS_FALL_RISK_CATEGORIES
+    node; PT_HISTORY=none routes to END (skipping freetext PT_NOTES). All
+    answers are locally parseable, so nothing goes live.
+    """
+    profile = ResidentProfile()
+    session = InterviewSession(
+        profile=profile, triggered_conditions=["fall_risk"]
+    )
+    # Any fallback to the API raises — the proof this test stays offline.
+    session._client = _NoApiClient()
+
+    answers = {
+        "FALL_HISTORY_6MO": "yes",              # boolean True -> fork TAKEN
+        "FALL_COUNT": "2",                       # digit numeric
+        "FALL_CIRCUMSTANCES": "bedside_or_transfer",
+        "FALL_OUTCOMES": "no_injury",
+        "ASSISTIVE_DEVICE": "walker",
+        "GAIT_STABILITY": "stable_with_device",
+        "MEDS_FALL_RISK": "no",                  # boolean False -> fork SKIPPED
+        "HOME_ACCOMMODATIONS": "grab_bars_bathroom",
+        "PT_HISTORY": "none",                    # -> END (skips PT_NOTES)
+    }
+
+    visited: list[str] = []
+    while True:
+        node = session.get_next_question()
+        if node is None:
+            break
+        nid = node["node_id"]
+        visited.append(nid)
+        session.submit_answer(answers[nid])
+
+    # Fork TAKEN: FALL_HISTORY_6MO=yes opened the FALL_COUNT follow-up.
+    assert "FALL_COUNT" in visited, "true-branch child was not visited"
+    # Fork SKIPPED: MEDS_FALL_RISK=no bypassed the MEDS_FALL_RISK_CATEGORIES
+    # freetext node, and PT_HISTORY=none bypassed PT_NOTES.
+    assert "MEDS_FALL_RISK_CATEGORIES" not in visited, "skip branch was entered"
+    assert "PT_NOTES" not in visited, "skip branch was entered"
+
+    # Nested-path updates land on the right sub-objects.
+    assert profile.fall_risk.history_6mo.any_falls is True
+    assert profile.fall_risk.history_6mo.count == 2
+    assert profile.fall_risk.assistive_device == "walker"
+    assert profile.fall_risk.gait_stability == "stable_with_device"
+    assert profile.fall_risk.medications.has_FRIDs is False
+    assert profile.fall_risk.pt_history.status == "none"
+
+    # numeric_or_null: the only such node (diabetes LAST_A1C) sits behind a
+    # freetext node and is unreachable in a pure offline walk, so exercise its
+    # parse path directly — still deterministic, still no fallback.
+    a1c_node = _diabetes_node("LAST_A1C")
+    assert session._parse_answer(a1c_node, "unknown") is None  # null case
+    assert session._parse_answer(a1c_node, "7.8") == 7.8       # value case
+
+    # Proof the whole test stayed offline.
+    assert session._fallback_parse_count == 0, (
+        f"expected zero API fallbacks, got {session._fallback_parse_count}"
+    )
 
 
 def build_starting_profile() -> ResidentProfile:
@@ -97,7 +195,8 @@ SIMULATED_ANSWERS = [
 ]
 
 
-def main() -> None:
+@pytest.mark.api
+def test_interview_full_walk_case_04() -> None:
     profile = build_starting_profile()
     initial_evidence_count = len(profile.evidence_snippets)
     initial_disagreement_evidence = list(
@@ -231,4 +330,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    test_interview_state_machine_offline()
+    test_interview_full_walk_case_04()
