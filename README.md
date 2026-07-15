@@ -220,7 +220,7 @@ the baseline ran one prompt. Ground truth is encoded per case in
 
 ### Per-case scores
 
-| case | full P | full R | base P | base R | halluc f | halluc b | disagr f | disagr b | gap P f | gap P b | gap R f | gap R b |
+| case | full P | full R | base P | base R | halluc f | halluc b | disagr f † | disagr b † | gap P f | gap P b | gap R f | gap R b |
 |------|-------:|-------:|-------:|-------:|---------:|---------:|:--------:|:--------:|--------:|--------:|--------:|--------:|
 | case_01 | 0.00 | 1.00 | 0.00 | 1.00 | 0 | n/a | no | no | 0.00 | 0.00 | 1.00 | 1.00 |
 | case_02 | 0.60 | 1.00 | 0.50 | 1.00 | 0 | n/a | yes | yes | 0.71 | 1.00 | 1.00 | 0.50 |
@@ -230,6 +230,17 @@ the baseline ran one prompt. Ground truth is encoded per case in
 | case_06 | 0.90 | 1.00 | 0.82 | 1.00 | 0 | n/a | yes | yes | 1.00 | 1.00 | 1.00 | 1.00 |
 | case_07 | 0.33 | 1.00 | 0.20 | 1.00 | 0 | n/a | yes | yes | 0.80 | 0.80 | 1.00 | 1.00 |
 | case_08 | 0.50 | 1.00 | 0.33 | 1.00 | 0 | n/a | yes | yes | 1.00 | 0.67 | 1.00 | 1.00 |
+
+> **† The `disagr` column and the macro "detection correct" row measure
+> different things — don't reconcile them directly.** The per-case `disagr f`
+> / `disagr b` columns record only whether a source disagreement was
+> *flagged* for that case (yes/no). The macro-averages row
+> **"Source-disagreement detection correct"** is stricter: it counts whether
+> the flag was *correct against ground truth* — flagging a case that has no
+> real disagreement, or missing one that does, both count against it. So the
+> number of "yes" flags in the column (6 of 8 for the staged pipeline) is not
+> the same quantity as the "4 / 8" correct figure below, and the two are not
+> expected to match.
 
 ### Macro averages
 
