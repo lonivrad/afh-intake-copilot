@@ -1,0 +1,21 @@
+[tool.pytest.ini_options]
+# The repo root holds the test_*.py files and is also the import root for the
+# `pipeline` and `ui` packages, so keep collection here.
+testpaths = ["."]
+markers = [
+    "api: test makes a live Anthropic API call (costs money). Skipped unless ANTHROPIC_API_KEY is set; run explicitly with `pytest -m api`.",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# run_evals.py deliberately inserts the repo root onto sys.path before it can
+# import the `pipeline` package, so its imports legitimately follow that
+# bootstrap. Scope the E402 exemption to this file only.
+"evals/run_evals.py" = ["E402"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+# Non-strict on purpose: this codebase is not type-annotated, so mypy runs in
+# CI as an advisory signal (continue-on-error), not a gate. Tighten later.
+follow_imports = "silent"
+exclude = ["venv/"]

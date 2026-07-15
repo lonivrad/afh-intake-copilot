@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from pipeline.extraction import (
     ADLStatus,
     ConditionsPresent,
@@ -216,7 +218,8 @@ def build_populated_profile() -> ResidentProfile:
     )
 
 
-def main() -> None:
+@pytest.mark.api
+def test_stage3_synthesis_case_04() -> None:
     case_04 = json.loads(Path("data/test_cases/case_04.json").read_text())
     source_docs = {
         "discharge_summary": case_04["inputs"]["discharge_summary"],
@@ -376,4 +379,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    test_stage3_synthesis_case_04()
