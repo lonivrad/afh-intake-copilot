@@ -15,7 +15,10 @@ markers = [
 [tool.mypy]
 python_version = "3.12"
 ignore_missing_imports = true
-# Non-strict on purpose: this codebase is not type-annotated, so mypy runs in
-# CI as an advisory signal (continue-on-error), not a gate. Tighten later.
+# Non-strict on purpose. The code carries real type information (Pydantic
+# models throughout the pipeline, typed function signatures), and CI runs
+# `mypy pipeline ui app.py` as a hard gate — the step blocks the build on any
+# error. Non-strict flags (no disallow-untyped-defs, etc.) keep the
+# gradually-typed UI code passing; tighten later.
 follow_imports = "silent"
 exclude = ["venv/"]
