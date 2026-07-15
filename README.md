@@ -253,12 +253,6 @@ the baseline ran one prompt. Ground truth is encoded per case in
 | Capability-gap recall | **1.00** | 0.94 |
 | Source-disagreement detection correct | **4 / 8** | 3 / 8 |
 
-The staged pipeline beats the single-call baseline on acuity-factor
-precision (+0.08), capability-gap precision (+0.05) and recall (+0.06),
-and source-disagreement detection (4/8 vs 3/8), with **zero hallucinated
-evidence references**. Acuity recall ties at 1.00 — both surface every
-required factor, but the staged pipeline over-recommends less.
-
 These numbers are *after* one targeted prompt iteration (see "Honest
 failure" below): adding a CLINICAL THRESHOLD rule moved acuity precision
 0.46 → 0.49 with recall held at 1.00 (case_07 0.25 → 0.33, case_08
@@ -310,30 +304,24 @@ numbers alone do not carry that argument; the structure does.
 ### Qualitative examples
 
 **Clear win — case_06.** All three modeled conditions, complex
-multi-system acuity. Full-pipeline acuity precision 0.90 vs baseline
-0.82, with gap precision/recall both 1.00. The staged system stayed
-more disciplined and preserved traceable evidence linkage; the baseline
-over-recommended more factors with no evidence layer.
+multi-system acuity: full-pipeline acuity precision 0.90 vs baseline 0.82,
+gap precision/recall both 1.00. The staged system stayed more disciplined
+and kept the evidence linkage the baseline had no layer for.
 
 **Tie — case_05.** Dementia + fall risk with a cognitive-mobility
-mismatch. Both systems landed at acuity precision 0.50 with the same
-false positives. The full pipeline still carried traceable evidence
-IDs; the baseline had no structural evidence layer.
+mismatch: both systems landed at acuity precision 0.50 with the same false
+positives, but only the staged pipeline carried traceable evidence IDs.
 
 **Honest failure — case_01.** Low-acuity diabetes (metformin only, no
-insulin, no hypoglycemic history, full ADL independence). Ground truth:
-zero acuity factors. The original failure mode: seeing "diabetes" pulled
-diabetes-shaped factors even though no complexity threshold was met. I
-added a **CLINICAL THRESHOLD** rule to the acuity synthesis prompt
-(`pipeline/synthesis.py`) stating that a diagnosis alone does not satisfy
-the evidence requirement — evidence must show the *specific* complexity
-(actual insulin/BGM dependency, complex multi-drug management, active
-supervision need), else set `confidence="low"` or suppress. Measured
-effect: it helped in aggregate (precision 0.46 → 0.49, recall held) and
-*partially* bit on case_01 — `CARE-MED-ADMIN-MULTI` dropped to **low**
-confidence — but the model **still recommends `CARE-INSULIN-BGM` at
-medium** for this metformin-only resident. Mitigated, not eliminated;
-this remains the dominant failure mode.
+insulin, no hypoglycemic history, full ADL independence); ground truth is
+zero acuity factors, yet seeing "diabetes" pulled diabetes-shaped factors.
+Adding a **CLINICAL THRESHOLD** rule to the acuity prompt
+(`pipeline/synthesis.py`) — a diagnosis alone does not satisfy the evidence
+requirement — helped in aggregate (precision 0.46 → 0.49) and dropped
+`CARE-MED-ADMIN-MULTI` to **low**, but the model **still recommends
+`CARE-INSULIN-BGM` at medium** for this metformin-only resident.
+Mitigated, not eliminated; it remains the dominant failure mode (mechanism
+and the next-step fix under "Where it breaks down").
 
 ### Where it breaks down
 
