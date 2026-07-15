@@ -62,6 +62,31 @@ from the disclosure document. Today this capability-vs-need check often
 happens in the operator's head rather than against the home's written
 disclosure.
 
+### What success looks like
+
+Success is defined in the operator's terms, not the model's. None of these
+are yet measured against real users (see **Validation plan**) — they are the
+outcomes the product is trying to move, and the targets that would tell us it
+works.
+
+- **Acuity captured, not leaked** — documentable acuity (insulin scope,
+  behavioral resistance, fall risk, medication-administration burden) is
+  surfaced and evidence-backed *before* the DSHS CARE assessment, rather than
+  missed or discovered late. Leading proxy today: acuity-factor
+  precision/recall on the eval set.
+- **Safer placements** — capability-vs-need mismatches (e.g. exit-seeking
+  dementia without secured egress) are flagged before move-in rather than
+  after. Leading proxy: capability-gap recall.
+- **Faster, more consistent intake** — shorter time from raw documents to a
+  defensible review package, and lower operator-to-operator variance on the
+  same inputs.
+- **Trust through auditability** — operators can trace and defend every
+  recommendation to source text. Adoption likely depends on this as much as
+  on accuracy.
+
+The technical metrics in §3 are proxies for the first two. The last two can
+only be measured with real users — which is what the validation plan is for.
+
 ---
 
 ## 2. Solution and design
@@ -327,6 +352,25 @@ family, physician, delegating RN, and care team must review the outputs.
 Capability gaps and concerns are explicitly framed for human follow-up,
 and the rationale/evidence is always inspectable.
 
+### What the evaluation taught me
+
+- **The precision delta is real but small; the structural advantages are the
+  actual case.** Eight cases and LLM non-determinism make a ±0.05–0.08
+  precision edge a weak signal on its own. Evidence grounding and
+  source-conflict preservation are what a one-shot workflow cannot replicate —
+  that reshaped how I argue the product's value (see "Why staged").
+- **Prompt rules mitigate but don't gate.** The CLINICAL THRESHOLD rule
+  improved aggregate precision (0.46 → 0.49) but did not stop case_01's
+  metformin-only resident from pulling `CARE-INSULIN-BGM`. Asking the model to
+  self-suppress is weaker than a hard gate on explicit complexity signals — a
+  lesson now carried into Future work.
+- **Recall was the easy part; precision is the hard part.** Both systems hit
+  1.00 acuity recall — surfacing every needed factor is not the challenge; not
+  over-recommending is.
+- **Trust aggregates, not cases.** Per-case numbers (disagreement detection,
+  individual gap precision) swing run-to-run with no code change, so I lean on
+  aggregates and treat no single case as proof.
+
 ---
 
 ## 4. Artifact snapshot
@@ -475,19 +519,74 @@ evals/
 
 ---
 
-## Scope and limitations
+## Scope: deliberate decisions and limitations
 
-- **Geography:** Washington State only — WAC citations, specialty
-  contracts, CARE classification, and disclosure assumptions are
-  Washington-specific.
+Some boundaries are deliberate product decisions, not gaps to be closed
+later. Separating the two is itself a product statement.
+
+**Decisions (chosen, with rationale):**
+
+- **No billing-code or CARE-classification semantics.** The app surfaces
+  *evidence of acuity* with WAC-referenced CARE factors; it deliberately does
+  **not** compute the resident's CARE classification level, assign a payment
+  code, or estimate a daily rate. Washington AFH Medicaid payment is set by
+  the official **DSHS CARE assessment**, conducted by a state assessor. The
+  app's job is to make sure documentable acuity is captured and defensible
+  going *into* that assessment — not to pre-empt or assert its result.
+  Asserting billing semantics would exceed the app's authority and become a
+  liability when wrong.
+- **Decision support, not decision maker.** Every final clinical, legal, and
+  admission call stays with the operator, family, physician, delegating RN,
+  and care team. The app frames concerns for human follow-up and keeps
+  rationale and evidence inspectable.
+- **Capability gaps are disclosure-relative.** Gaps are measured against the
+  home's written AFH Disclosure of Services, not an abstract standard —
+  because that disclosure is the document the operator is actually
+  accountable to.
+
+**Limitations (current constraints, not choices):**
+
+- **Geography:** Washington State only — WAC citations, specialty contracts,
+  CARE classification, and disclosure assumptions are Washington-specific.
 - **Conditions modeled:** diabetes, dementia, fall risk. Not yet modeled:
   COPD/oxygen, dialysis, mental-health behavioral support, developmental
   disabilities.
 - **CARE catalog:** 12 curated factors; not every CARE pathway.
-- **Data:** 8 synthetic cases; no real residents, no PII committed
-  (`.env` and data exclusions are git-ignored).
-- **Decision support only:** all final clinical, billing, legal, and
-  admission decisions remain with the human care team.
+- **Data:** 8 synthetic cases; no real residents, no PII committed (`.env`
+  and data exclusions are git-ignored).
+- **Inputs:** no OCR for image-only scanned PDFs.
+
+## Validation plan
+
+This project is **pre-user-testing**: it has been evaluated on synthetic
+cases only. No operators have used it yet, so nothing here is a finding — it
+is a plan. The metrics in §3 validate *model behavior*, not *product value*;
+product value requires putting it in front of real operators. The riskiest
+assumptions, in rough priority order, each with a cheap way to disconfirm it:
+
+1. **Operators will trust an AI-surfaced acuity recommendation enough to act
+   on it.** The evidence trail is the intended mitigation, but that this is
+   sufficient is unverified. *Test:* moderated sessions with 5–8 operators on
+   their own de-identified intakes; observe whether they accept, edit, or
+   discard recommendations, and why.
+2. **Documentable acuity is actually being leaked today.** The revenue-leak
+   premise is plausible but unquantified. *Test:* on a set of real historical
+   intakes, compare the factors the app surfaces against what operators
+   independently captured; count what the app caught that was missed (and the
+   reverse).
+3. **Synthetic cases resemble real intake documents.** Real discharge
+   summaries are longer, messier, and less complete than the synthetic set.
+   *Test:* run the pipeline on real de-identified records and re-measure
+   hallucination rate and extraction completeness; expect degradation.
+4. **The disclosure-vs-need gap check matches how operators reason about
+   capability.** *Test:* have operators rate whether flagged gaps are the ones
+   they would actually worry about, and whether any real concern was missed.
+5. **The tool saves time rather than adding a review step.** *Test:* time
+   intake with and without the tool on matched cases.
+
+The plan is to run assumptions 1–3 first: they are both the riskiest and the
+fastest to falsify. Until they are tested, every claim of product value in
+this README is a hypothesis, not a result.
 
 ## Future work
 
