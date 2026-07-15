@@ -228,6 +228,49 @@ failure" below): adding a CLINICAL THRESHOLD rule moved acuity precision
 0.46 → 0.49 with recall held at 1.00 (case_07 0.25 → 0.33, case_08
 0.40 → 0.50; no case regressed).
 
+### Why staged, beyond the precision delta
+
+Read only the precision column and the case for the staged pipeline looks
+marginal: +0.08 acuity precision (0.49 vs 0.41), +0.05 capability-gap
+precision (0.81 vs 0.76), identical 1.00 acuity recall. Eight synthetic
+cases and LLM non-determinism mean those deltas alone would not justify
+the extra machinery. The durable reason to prefer the staged pipeline is
+two things the one-shot baseline **cannot do by construction**, not two
+things it merely does less well.
+
+**Traceability through evidence grounding.** Every acuity factor,
+care-plan item, and capability gap the staged pipeline emits carries
+`evidence_snippet_ids` that resolve to verbatim source text in a
+persistent resident profile. Because those references are validated
+against that profile, the eval could check them — and found **zero
+hallucinated evidence references across all eight cases**. The baseline
+produces the same-shaped output but builds no evidence graph, so its
+references cannot be grounded or checked the same way; that is why the
+hallucination column reads `n/a` for the baseline rather than a number.
+The `n/a` is the point: for a pre-admission decision an operator has to
+defend to a family, a physician, or a DSHS reviewer, "here is the
+sentence in the discharge summary" is the difference between a reviewable
+recommendation and an opaque one.
+
+**Source-conflict handling.** When the discharge summary and the family
+notes disagree — for example, on a resident's orientation level — the
+staged pipeline records the conflict as a first-class `SourceDisagreement`
+object that survives extraction through synthesis and surfaces to the
+operator instead of silently collapsing to one side. A single pass has
+nowhere to put a conflict: it must resolve both sources into one answer in
+the same breath it reads them. Detection is only modestly better on the
+numbers (correct on 4 of 8 cases vs 3 of 8 — neither is strong, and this
+is a place both approaches need work), but even when detection ties, only
+the staged pipeline *preserves* the disagreement for a human to
+adjudicate rather than discarding it.
+
+Bottom line, stated honestly: the aggregate metrics favor the staged
+pipeline slightly, and no single case is a landslide. The reason to run it
+is that it yields a **defensible, auditable** recommendation — grounded
+evidence plus preserved source conflicts — which for a regulated
+pre-admission decision matters more than a few points of precision. The
+numbers alone do not carry that argument; the structure does.
+
 ### Qualitative examples
 
 **Clear win — case_06.** All three modeled conditions, complex
